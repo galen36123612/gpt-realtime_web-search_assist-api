@@ -150,10 +150,19 @@ import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    // ✅ 這裡一定要 await（你目前 Next 版本 cookies() 是 Promise）
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "Missing OPENAI_API_KEY" },
+        { status: 500 }
+      );
+    }
+
+    // ✅ Next 版本差異：cookies() 可能是同步也可能是 Promise；await 兩邊都安全
     const cookieStore = await cookies();
 
     let userId = cookieStore.get("anonId")?.value;
@@ -162,19 +171,29 @@ export async function GET() {
 
     const sessionId = randomUUID();
 
-    // ✅ GA：建立 Realtime client secret（ephemeral key）
+    // ✅ 建立 Realtime client secret（ephemeral key）
+    // 重點：output_modalities 要包含 text，否則你前端就收不到文字輸出事件
     const resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
+      cache: "no-store",
       body: JSON.stringify({
         expires_after: { anchor: "created_at", seconds: 600 },
         session: {
           type: "realtime",
           model: "gpt-realtime",
-          audio: { output: { voice: "shimmer" } },
+          output_modalities: ["audio", "text"],
+          audio: {
+            input: {
+              transcription: { model: "whisper-1" },
+            },
+            output: {
+              voice: "shimmer",
+            },
+          },
         },
       }),
     });
@@ -184,19 +203,29 @@ export async function GET() {
     if (!resp.ok) {
       console.error("OpenAI client_secrets error:", resp.status, data);
       return NextResponse.json(
-        { error: "Failed to create realtime client secret", status: resp.status, details: data },
+        {
+          error: "Failed to create realtime client secret",
+          status: resp.status,
+          details: data,
+        },
         { status: 500 }
       );
     }
 
     // ✅ 為了相容你前端舊寫法：仍回傳 client_secret.value
-    const res = NextResponse.json({
-      userId,
-      sessionId,
-      // GA 回的是 data.value / data.expires_at，我們包成 client_secret 給前端用
-      client_secret: { value: data?.value, expires_at: data?.expires_at },
-      session: data?.session,
-    });
+    const res = NextResponse.json(
+      {
+        userId,
+        sessionId,
+        client_secret: { value: data?.value, expires_at: data?.expires_at },
+        session: data?.session,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
 
     if (needSetCookie) {
       res.cookies.set({
@@ -204,6 +233,7 @@ export async function GET() {
         value: userId,
         httpOnly: true,
         sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: 60 * 60 * 24 * 365,
       });
@@ -218,6 +248,7 @@ export async function GET() {
     );
   }
 }
+
 
 
 
