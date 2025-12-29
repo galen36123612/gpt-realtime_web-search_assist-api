@@ -17129,7 +17129,7 @@ export default App;*/
 
 // 1223 Testing realtime gpt + gpt5 + file search
 
-"use client";
+/*"use client";
 
 import React, { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -17148,7 +17148,7 @@ import useAudioDownload from "./hooks/useAudioDownload";
 // ✅ 統一日誌角色型別（含 feedback）
 type LogRole = "user" | "assistant" | "system" | "feedback";
 
-/** ✅ 從 Realtime 的 response.output 中提取 citations（檔案引用） */
+
 function extractFileCitationsFromOutput(
   output: any
 ): Array<{ file_id?: string; vector_store_id?: string; quote?: string }> {
@@ -17942,7 +17942,7 @@ function AppContent() {
     pendingLogsRef.current.length = 0;
   }
 
-  /** ✅ 使用 agentConfig tools + 自動補上 web_search（若尚未定義） */
+  
   const updateSession = () => {
     sendClientEvent({ type: "input_audio_buffer.clear" }, "clear audio buffer on session update");
     const currentAgent = selectedAgentConfigSet?.find(
@@ -18003,6 +18003,1194 @@ function AppContent() {
       },
     };
     sendClientEvent(sessionUpdateEvent, "agent.tools + web_search");
+  };
+
+  const cancelAssistantSpeech = async () => {
+    const mostRecentAssistantMessage = [...transcriptItems].reverse().find((item) => item.role === "assistant");
+    if (!mostRecentAssistantMessage) return;
+    if ((mostRecentAssistantMessage as any).status === "IN_PROGRESS") {
+      sendClientEvent({ type: "response.cancel" }, "(cancel due to user interruption)");
+    }
+    if (isOutputAudioBufferActive) {
+      sendClientEvent({ type: "output_audio_buffer.clear" }, "(cancel due to user interruption)");
+    }
+  };
+
+  const handleSendTextMessage = () => {
+    const textToSend = userText.trim();
+    if (!textToSend) return;
+
+    cancelAssistantSpeech();
+
+    sendClientEvent(
+      {
+        type: "conversation.item.create",
+        item: { type: "message", role: "user", content: [{ type: "input_text", text: textToSend }] },
+      },
+      "(send user text message)"
+    );
+
+    const eventId = `text_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    conversationState.current.currentUserMessage = {
+      content: textToSend,
+      eventId,
+      timestamp: Date.now(),
+    };
+
+    setUserText("");
+    sendClientEvent({ type: "response.create" }, "(trigger response)");
+  };
+
+  const handleTalkButtonDown = () => {
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open") return;
+    cancelAssistantSpeech();
+    setIsPTTUserSpeaking(true);
+    setIsListening(true);
+    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear PTT buffer");
+  };
+
+  const handleTalkButtonUp = () => {
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open" || !isPTTUserSpeaking) return;
+    setIsPTTUserSpeaking(false);
+    setIsListening(false);
+    sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
+    sendClientEvent({ type: "response.create" }, "trigger response PTT");
+  };
+
+  const handleMicrophoneClick = () => {
+    if (isOutputAudioBufferActive) {
+      cancelAssistantSpeech();
+      return;
+    }
+    toggleConversationMode();
+  };
+
+  const toggleConversationMode = () => {
+    const newMode = !isPTTActive;
+    setIsPTTActive(newMode);
+    localStorage.setItem("conversationMode", newMode ? "PTT" : "VAD");
+  };
+
+  useEffect(() => {
+    setIsPTTActive(false);
+    localStorage.setItem("conversationMode", "VAD");
+
+    const storedLogsExpanded = localStorage.getItem("logsExpanded");
+    if (storedLogsExpanded) setIsEventsPaneExpanded(storedLogsExpanded === "true");
+    else localStorage.setItem("logsExpanded", "false");
+
+    const storedAudioPlaybackEnabled = localStorage.getItem("audioPlaybackEnabled");
+    if (storedAudioPlaybackEnabled) setIsAudioPlaybackEnabled(storedAudioPlaybackEnabled === "true");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
+  }, [isEventsPaneExpanded]);
+
+  useEffect(() => {
+    localStorage.setItem("audioPlaybackEnabled", isAudioPlaybackEnabled.toString());
+  }, [isAudioPlaybackEnabled]);
+
+  useEffect(() => {
+    if (audioElement.current) {
+      if (isAudioPlaybackEnabled) {
+        audioElement.current.play().catch((err) => console.warn("Autoplay may be blocked by browser:", err));
+      } else {
+        audioElement.current.pause();
+      }
+    }
+  }, [isAudioPlaybackEnabled]);
+
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED" && audioElement.current?.srcObject) {
+      const remoteStream = audioElement.current.srcObject as MediaStream;
+      startRecording(remoteStream);
+    }
+    return () => {
+      stopRecording();
+    };
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    return () => {
+      stopSession();
+    };
+  }, []);
+
+  return (
+    <div
+      className="text-base flex flex-col bg-gray-100 text-gray-800 relative"
+      style={{ height: "100dvh", maxHeight: "100dvh" }}
+    >
+      <div className="p-3 sm:p-5 text-lg font-semibold flex justify-between items-center flex-shrink-0 border-b border-gray-200">
+        <div className="flex items-center cursor-pointer" onClick={() => window.location.reload()}>
+          <div>
+            <Image src="/aigoasia_logo.png" alt="Weider Logo" width={40} height={40} className="mr-2" />
+          </div>
+          <div>AI解籤服務</div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleMicrophoneClick}
+            className={`w-12 h-12 rounded-full flex items-center justify-center font-medium transition-all duration-200 relative ${
+              isPTTActive
+                ? "bg-blue-500 text-white hover:bg-blue-600 shadow-md animate-pulse"
+                : "bg-green-500 text-white hover:bg-green-600 shadow-md animate-pulse"
+            }`}
+            title={
+              isOutputAudioBufferActive
+                ? "點擊打斷 AI 講話"
+                : isPTTActive
+                ? "點擊切換到持續對話模式"
+                : "持續對話模式"
+            }
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+            {!isPTTActive && isListening && !isOutputAudioBufferActive && (
+              <div className="absolute -top-1 -right-1">
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
+                <div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full"></div>
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative min-h-0">
+        <Transcript
+          userText={userText}
+          setUserText={setUserText}
+          onSendMessage={handleSendTextMessage}
+          downloadRecording={downloadRecording}
+          canSend={sessionStatus === "CONNECTED" && dataChannel?.readyState === "open"}
+          handleTalkButtonDown={handleTalkButtonDown}
+          handleTalkButtonUp={handleTalkButtonUp}
+          isPTTUserSpeaking={isPTTUserSpeaking}
+          isPTTActive={isPTTActive}
+          onRate={sendSatisfactionRating}
+          ratingsByTargetId={ratingsByTargetId}
+        />
+        <Events isExpanded={isEventsPaneExpanded} />
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-lg">載入中...</div>
+        </div>
+      }
+    >
+      <AppContent />
+    </Suspense>
+  );
+}
+
+export default App;*/
+
+// 1229 realtime + web search + assist
+
+"use client";
+
+import React, { useEffect, useRef, useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Image from "next/image";
+
+import Transcript from "./components/Transcript";
+import Events from "./components/Events";
+
+import { AgentConfig, SessionStatus } from "@/app/types";
+import { useTranscript } from "@/app/contexts/TranscriptContext";
+import { useEvent } from "@/app/contexts/EventContext";
+import { useHandleServerEvent } from "./hooks/useHandleServerEvent";
+import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
+import useAudioDownload from "./hooks/useAudioDownload";
+
+// ✅ 統一日誌角色型別（含 feedback）
+type LogRole = "user" | "assistant" | "system" | "feedback";
+
+/** ✅ 從 Realtime 的 response.output 中提取 citations（檔案引用） */
+function extractFileCitationsFromOutput(
+  output: any
+): Array<{ file_id?: string; vector_store_id?: string; quote?: string }> {
+  const citations: Array<{ file_id?: string; vector_store_id?: string; quote?: string }> = [];
+  const list = Array.isArray(output) ? output : [];
+
+  for (const item of list) {
+    if (item?.type === "message" && Array.isArray(item.content)) {
+      for (const part of item.content) {
+        const annotations = part?.annotations || [];
+        if (Array.isArray(annotations)) {
+          for (const ann of annotations) {
+            if (
+              (ann?.type && String(ann.type).toLowerCase().includes("file")) ||
+              ann?.file_id ||
+              ann?.vector_store_id
+            ) {
+              citations.push({
+                file_id: ann.file_id,
+                vector_store_id: ann.vector_store_id,
+                quote: ann.quote,
+              });
+            }
+          }
+        }
+      }
+    }
+    if (item?.type === "file_search_call") {
+      citations.push({ vector_store_id: item?.vector_store_id });
+    }
+  }
+
+  return citations;
+}
+
+function AppContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  function setSearchParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set(key, value);
+    router.replace(`?${params.toString()}`);
+  }
+
+  const { transcriptItems } = useTranscript();
+  const { logClientEvent, logServerEvent } = useEvent();
+
+  const [selectedAgentName, setSelectedAgentName] = useState<string>("");
+  const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
+
+  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const audioElement = useRef<HTMLAudioElement | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("DISCONNECTED");
+
+  // ⭐️ 本地記錄：每個 assistant 訊息的評分（eventId -> 0/20/50/70/100）
+  const [ratingsByTargetId, setRatingsByTargetId] = useState<Record<string, number>>({});
+
+  // ⭐️ 送出評分
+  function sendSatisfactionRating(targetEventId: string, rating: number) {
+    const payloadContent = `[RATING] target=${targetEventId} value=${rating}`;
+    const feedbackId = `feedback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    reallyPostLog({
+      role: "feedback",
+      content: payloadContent,
+      eventId: feedbackId,
+      timestamp: Date.now(),
+      rating,
+      targetEventId,
+    })
+      .then(() => {
+        setRatingsByTargetId((prev) => ({ ...prev, [targetEventId]: rating }));
+      })
+      .catch((err) => console.error("💥 Error posting rating:", err));
+  }
+
+  const [isEventsPaneExpanded, setIsEventsPaneExpanded] = useState<boolean>(false);
+  const [userText, setUserText] = useState<string>("");
+  const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
+  const [isPTTUserSpeaking, setIsPTTUserSpeaking] = useState<boolean>(false);
+  const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] = useState<boolean>(true);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [isOutputAudioBufferActive, setIsOutputAudioBufferActive] = useState<boolean>(false);
+
+  const { startRecording, stopRecording, downloadRecording } = useAudioDownload();
+
+  // ===== 對話管理狀態 =====
+  const [userId, setUserId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>("");
+
+  // ✅ 讓 Assistants API 保持同一個 thread（可選）
+  const [assistantThreadId, setAssistantThreadId] = useState<string>("");
+
+  // 讓 thread_id 跨 reload 仍可延續（可自行拿掉）
+  useEffect(() => {
+    const saved = localStorage.getItem("assistantThreadId");
+    if (saved) setAssistantThreadId(saved);
+  }, []);
+  useEffect(() => {
+    if (assistantThreadId) localStorage.setItem("assistantThreadId", assistantThreadId);
+  }, [assistantThreadId]);
+
+  // 🔄 新的對話管理系統
+  const conversationState = useRef({
+    currentUserMessage: null as { content: string; eventId: string; timestamp: number } | null,
+    currentAssistantResponse: {
+      isActive: false,
+      responseId: null as string | null,
+      textBuffer: "",
+      audioTranscriptBuffer: "",
+      startTime: 0,
+    },
+    conversationPairs: [] as Array<{
+      user: { content: string; eventId: string; timestamp: number };
+      assistant: { content: string; eventId: string; timestamp: number } | null;
+      pairId: string;
+    }>,
+  });
+
+  // 防重複記錄
+  const loggedEventIds = useRef<Set<string>>(new Set());
+
+  // ✅ 防止 function_call 因為 response.done/response.completed 重複被處理
+  const processedToolCallIds = useRef<Set<string>>(new Set());
+
+  const pendingLogsRef = useRef<
+    Array<{
+      role: LogRole;
+      content: string;
+      eventId?: string;
+      pairId?: string;
+      timestamp?: number;
+      rating?: number;
+      targetEventId?: string;
+    }>
+  >([]);
+
+  // 🆕 對話配對日誌函數
+  function logConversationPair(
+    userMsg: { content: string; eventId: string; timestamp: number },
+    assistantMsg: { content: string; eventId: string; timestamp: number }
+  ) {
+    const pairId = `pair_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    reallyPostLog({
+      role: "user",
+      content: userMsg.content,
+      eventId: userMsg.eventId,
+      pairId,
+      timestamp: userMsg.timestamp,
+    })
+      .then(() => {
+        return reallyPostLog({
+          role: "assistant",
+          content: assistantMsg.content,
+          eventId: assistantMsg.eventId,
+          pairId,
+          timestamp: assistantMsg.timestamp,
+        });
+      })
+      .then(() => {
+        console.log(
+          `📝 Logged conversation pair: Q(${userMsg.content.slice(0, 30)}...) -> A(${assistantMsg.content.slice(
+            0,
+            30
+          )}...)`
+        );
+      })
+      .catch((error) => {
+        console.error("💥 Error logging conversation pair:", error);
+      });
+  }
+
+  // 🔧 更新的 reallyPostLog 函數
+  async function reallyPostLog(log: {
+    role: LogRole;
+    content: string;
+    eventId?: string;
+    pairId?: string;
+    timestamp?: number;
+    rating?: number;
+    targetEventId?: string;
+  }) {
+    const eventId = log.eventId || `${log.role}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    if (loggedEventIds.current.has(eventId)) {
+      console.warn("🔄 Duplicate log prevented:", eventId);
+      return;
+    }
+    loggedEventIds.current.add(eventId);
+
+    const uid = userId || "unknown";
+    const sid = sessionId || "unknown";
+    const payload = {
+      ...log,
+      userId: uid,
+      sessionId: sid,
+      eventId,
+      timestamp: log.timestamp || Date.now(),
+    };
+
+    try {
+      const res = await fetch("/api/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+      if (!res.ok) {
+        console.error("❌ Log API failed:", res.status, res.statusText);
+      } else {
+        console.log("✅ Log posted:", {
+          role: log.role,
+          eventId,
+          pairId: log.pairId,
+          preview: log.content.slice(0, 100) + (log.content.length > 100 ? "..." : ""),
+          uid,
+          sid,
+        });
+      }
+    } catch (e) {
+      console.error("💥 postLog failed:", e);
+      pendingLogsRef.current.push({ ...log, eventId });
+    }
+  }
+
+  // 保留原本的 postLog
+  function postLog(log: {
+    role: LogRole;
+    content: string;
+    eventId?: string;
+    pairId?: string;
+    timestamp?: number;
+    rating?: number;
+    targetEventId?: string;
+  }) {
+    if (!log.content?.trim()) {
+      console.warn("🚫 postLog skipped: empty content");
+      return;
+    }
+    if (!log.eventId) {
+      log.eventId = `${log.role}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    }
+    if (loggedEventIds.current.has(log.eventId)) {
+      console.warn("🔄 Duplicate log prevented (pre-flight):", log.eventId);
+      return;
+    }
+    reallyPostLog(log).catch((error) => {
+      console.error("💥 Error in postLog:", error);
+    });
+  }
+
+  // 佇列 flush
+  useEffect(() => {
+    const flush = async () => {
+      if (pendingLogsRef.current.length === 0) return;
+      console.log(`🚀 Flushing pending logs queue: ${pendingLogsRef.current.length} items`);
+      const queue = [...pendingLogsRef.current];
+      pendingLogsRef.current.length = 0;
+      for (const log of queue) {
+        await reallyPostLog(log);
+      }
+    };
+    flush();
+
+    const onOnline = () => flush();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [userId, sessionId]);
+
+  // 輔助：從 output 取文字
+  function extractTextFromOutput(output: any): string {
+    let text = "";
+    if (Array.isArray(output)) {
+      for (const item of output) {
+        if (item?.type === "text" && item.text) {
+          text += item.text;
+        } else if (item?.content) {
+          const content = Array.isArray(item.content) ? item.content : [item.content];
+          for (const contentItem of content) {
+            if (contentItem?.type === "text" && contentItem.text) {
+              text += contentItem.text;
+            } else if (contentItem?.type === "audio" && contentItem.transcript) {
+              console.log("🎵 Found audio transcript in output:", contentItem.transcript);
+              text += contentItem.transcript;
+            } else if (
+              (contentItem?.type === "output_text" || contentItem?.type === "text") &&
+              contentItem?.text
+            ) {
+              text += contentItem.text;
+            }
+          }
+        }
+      }
+    }
+    return text;
+  }
+
+  const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
+    if (dataChannel && dataChannel.readyState === "open") {
+      logClientEvent(eventObj, eventNameSuffix);
+      dataChannel.send(JSON.stringify(eventObj));
+    } else {
+      logClientEvent({ attemptedEvent: eventObj.type }, "error.data_channel_not_open");
+      console.error("Failed to send message - no data channel available", eventObj);
+    }
+  };
+
+  const handleServerEventRef = useHandleServerEvent({
+    setSessionStatus,
+    selectedAgentName,
+    selectedAgentConfigSet,
+    sendClientEvent,
+    setSelectedAgentName,
+    setIsOutputAudioBufferActive,
+  });
+
+  useEffect(() => {
+    let finalAgentConfig = searchParams.get("agentConfig");
+    if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
+      finalAgentConfig = defaultAgentSetKey;
+      setSearchParam("agentConfig", finalAgentConfig);
+      return;
+    }
+    const agents = allAgentSets[finalAgentConfig];
+    const agentKeyToUse = agents[0]?.name || "";
+    setSelectedAgentName(agentKeyToUse);
+    setSelectedAgentConfigSet(agents);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
+      startSession();
+    }
+  }, [selectedAgentName]);
+
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED" && selectedAgentConfigSet && selectedAgentName) {
+      updateSession();
+    }
+  }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED") {
+      updateSession();
+    }
+  }, [isPTTActive]);
+
+  async function startSession() {
+    if (sessionStatus !== "DISCONNECTED") return;
+    await connectToRealtime();
+  }
+
+  async function connectToRealtime() {
+    setSessionStatus("CONNECTING");
+    try {
+      logClientEvent({ url: "/api/session" }, "fetch_session_token_request");
+      const tokenResponse = await fetch("/api/session");
+      const data = await tokenResponse.json();
+      logServerEvent(data, "fetch_session_token_response");
+
+      if (data?.userId) {
+        setUserId(data.userId);
+        console.log("👤 User ID set:", data.userId.substring(0, 8) + "...");
+      }
+      if (data?.sessionId) {
+        setSessionId(data.sessionId);
+        console.log("🔗 Session ID set:", data.sessionId.substring(0, 8) + "...");
+      }
+
+      if (!data.client_secret?.value) {
+        logClientEvent(data, "error.no_ephemeral_key");
+        console.error("No ephemeral key provided by the server");
+        setSessionStatus("DISCONNECTED");
+        return;
+      }
+
+      const EPHEMERAL_KEY = data.client_secret.value;
+
+      // WebRTC 設置
+      const pc = new RTCPeerConnection();
+      peerConnection.current = pc;
+
+      audioElement.current = document.createElement("audio");
+      audioElement.current.autoplay = isAudioPlaybackEnabled;
+      pc.ontrack = (e) => {
+        if (audioElement.current) audioElement.current.srcObject = e.streams[0];
+      };
+
+      const newMs = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      pc.addTrack(newMs.getTracks()[0]);
+
+      const dc = pc.createDataChannel("oai-events");
+      setDataChannel(dc);
+
+      dc.addEventListener("open", () => {
+        logClientEvent({}, "data_channel.open");
+        setSessionStatus("CONNECTED");
+        console.log("🚀 Data channel opened - ready for conversation");
+      });
+
+      dc.addEventListener("close", () => {
+        logClientEvent({}, "data_channel.close");
+        setSessionStatus("DISCONNECTED");
+      });
+
+      dc.addEventListener("error", (err: any) => {
+        logClientEvent({ error: err }, "data_channel.error");
+      });
+
+      // ★★★ 事件處理（含 citations 抽取 + tool calling） ★★★
+      dc.addEventListener("message", (e: MessageEvent) => {
+        const eventData: any = JSON.parse(e.data);
+        handleServerEventRef.current(eventData);
+
+        const eventType = String(eventData?.type || "");
+        console.log("📨 Event:", eventType);
+
+        // 1️⃣ 用戶語音輸入完成
+        if (eventType === "conversation.item.input_audio_transcription.completed") {
+          const raw = eventData.transcript || eventData.text || "";
+          const normalized = raw && raw.trim() && raw.trim() !== "\n" ? raw.trim() : "[inaudible]";
+          const eventId = eventData.item_id || `speech_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+          conversationState.current.currentUserMessage = {
+            content: normalized,
+            eventId,
+            timestamp: Date.now(),
+          };
+        }
+
+        // 1.1 補捉 item.created（語音轉錄）
+        if (eventType === "conversation.item.created") {
+          const item = eventData.item;
+          if (item?.role === "user" && Array.isArray(item.content)) {
+            const transcripts = item.content.map((c: any) => c?.transcript).filter(Boolean) as string[];
+            const joined = transcripts.join("").trim();
+            if (joined && !conversationState.current.currentUserMessage) {
+              conversationState.current.currentUserMessage = {
+                content: joined,
+                eventId: item.id,
+                timestamp: Date.now(),
+              };
+            }
+          }
+        }
+
+        // 1.2 STT 失敗記錄
+        if (eventType === "conversation.item.input_audio_transcription.failed") {
+          const reason = eventData?.error || "unknown";
+          postLog({
+            role: "system",
+            content: `[STT FAILED] ${String(reason).slice(0, 200)}`,
+            eventId: eventData.item_id || `stt_fail_${Date.now()}`,
+          });
+        }
+
+        // 2️⃣ 助手回應開始
+        if (eventType === "response.created") {
+          const responseId = eventData.response?.id || eventData.id;
+          conversationState.current.currentAssistantResponse = {
+            isActive: true,
+            responseId,
+            textBuffer: "",
+            audioTranscriptBuffer: "",
+            startTime: Date.now(),
+          };
+        }
+
+        // 3️⃣ 音頻轉錄增量
+        if (eventType === "response.audio_transcript.delta") {
+          const delta = eventData.delta || "";
+          if (delta && conversationState.current.currentAssistantResponse.isActive) {
+            conversationState.current.currentAssistantResponse.audioTranscriptBuffer += delta;
+          }
+        }
+        if (eventType === "response.audio_transcript.done") {
+          const transcript = eventData.transcript || "";
+          if (transcript && conversationState.current.currentAssistantResponse.isActive) {
+            if (
+              conversationState.current.currentAssistantResponse.audioTranscriptBuffer.length < transcript.length
+            ) {
+              conversationState.current.currentAssistantResponse.audioTranscriptBuffer = transcript;
+            }
+          }
+        }
+
+        // 4️⃣ 文字增量事件
+        const TEXT_DELTA_EVENTS = [
+          "response.text.delta",
+          "response.output_text.delta",
+          "output_text.delta",
+          "conversation.item.delta",
+        ];
+        if (TEXT_DELTA_EVENTS.some((ev) => eventType.includes(ev))) {
+          const delta = eventData.delta || eventData.text || "";
+          if (delta && conversationState.current.currentAssistantResponse.isActive) {
+            conversationState.current.currentAssistantResponse.textBuffer += delta;
+          }
+        }
+
+        // 5️⃣ 文字完成事件
+        const TEXT_DONE_EVENTS = ["response.text.done", "response.output_text.done", "output_text.done"];
+        if (TEXT_DONE_EVENTS.some((ev) => eventType.includes(ev))) {
+          const completedText = eventData.text || "";
+          if (completedText && conversationState.current.currentAssistantResponse.isActive) {
+            if (conversationState.current.currentAssistantResponse.textBuffer.length < completedText.length) {
+              conversationState.current.currentAssistantResponse.textBuffer = completedText;
+            }
+          }
+        }
+
+        // 6️⃣ 內容部分完成
+        if (eventType === "response.content_part.done") {
+          const part = eventData.part;
+          if (part?.type === "text" && part.text && conversationState.current.currentAssistantResponse.isActive) {
+            if (!conversationState.current.currentAssistantResponse.textBuffer) {
+              conversationState.current.currentAssistantResponse.textBuffer = part.text;
+            }
+          }
+        }
+
+        // 7️⃣ 助手回應完成 - ✅支援 function_call(web_search / assistant_run) + 配對記錄 + citation 抽取
+        const RESPONSE_DONE_EVENTS = ["response.done", "response.completed"];
+        if (RESPONSE_DONE_EVENTS.includes(eventType)) {
+          const outputItems = eventData?.response?.output || [];
+          const functionCalls = Array.isArray(outputItems)
+            ? outputItems.filter((it: any) => it?.type === "function_call" && it?.call_id && it?.name)
+            : [];
+
+          if (functionCalls.length) {
+            const callsToProcess = functionCalls.filter((c: any) => !processedToolCallIds.current.has(c.call_id));
+            if (callsToProcess.length) {
+              callsToProcess.forEach((c: any) => processedToolCallIds.current.add(c.call_id));
+
+              void (async () => {
+                try {
+                  for (const call of callsToProcess) {
+                    let args: any = {};
+                    try {
+                      args =
+                        typeof call.arguments === "string"
+                          ? JSON.parse(call.arguments || "{}")
+                          : call.arguments || {};
+                    } catch {
+                      args = {};
+                    }
+
+                    // ✅ A) web_search
+                    if (call.name === "web_search") {
+                      const query = String(args.query || "").trim();
+                      const recency_days = Number(args.recency_days || 30);
+                      const domains = Array.isArray(args.domains) ? args.domains : undefined;
+
+                      postLog({
+                        role: "system",
+                        content: `[WEB_SEARCH CALL] query="${query}" recency_days=${recency_days}${
+                          domains?.length ? ` domains=${JSON.stringify(domains).slice(0, 200)}` : ""
+                        }`,
+                        eventId: `web_search_call_${call.call_id}`,
+                      });
+
+                      const res = await fetch("/api/web_search", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query, recency_days, domains }),
+                      });
+
+                      let data: any = null;
+                      try {
+                        data = await res.json();
+                      } catch (err) {
+                        data = { error: `Failed to parse JSON: ${String(err)}` };
+                      }
+
+                      if (!res.ok) {
+                        postLog({
+                          role: "system",
+                          content: `[WEB_SEARCH ERROR] status=${res.status} ${res.statusText} body=${JSON.stringify(
+                            data
+                          ).slice(0, 300)}`,
+                          eventId: `web_search_err_${call.call_id}`,
+                        });
+                      } else {
+                        const cCount = Array.isArray(data?.citations) ? data.citations.length : 0;
+                        postLog({
+                          role: "system",
+                          content: `[WEB_SEARCH OK] citations=${cCount} preview=${String(data?.answer || "").slice(
+                            0,
+                            200
+                          )}`,
+                          eventId: `web_search_ok_${call.call_id}`,
+                        });
+                      }
+
+                      sendClientEvent(
+                        {
+                          type: "conversation.item.create",
+                          item: {
+                            type: "function_call_output",
+                            call_id: call.call_id,
+                            output: JSON.stringify(data).slice(0, 20000),
+                          },
+                        },
+                        "(tool output: web_search)"
+                      );
+                      continue;
+                    }
+
+                    // ✅ B) assistant_run (Assistants API 透過你後端執行)
+                    if (call.name === "assistant_run") {
+                      const input = String(args.input || args.query || "").trim();
+                      const providedThread = String(args.thread_id || "").trim();
+
+                      postLog({
+                        role: "system",
+                        content: `[ASSISTANT_RUN CALL] input="${input.slice(0, 200)}" thread_id=${
+                          providedThread || assistantThreadId || "(new)"
+                        }`,
+                        eventId: `assistant_run_call_${call.call_id}`,
+                      });
+
+                      const res = await fetch("/api/assistant_run", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          input,
+                          thread_id: providedThread || assistantThreadId || undefined,
+                          userId,
+                          sessionId,
+                        }),
+                      });
+
+                      let data: any = null;
+                      try {
+                        data = await res.json();
+                      } catch (err) {
+                        data = { error: `Failed to parse JSON: ${String(err)}` };
+                      }
+
+                      if (!res.ok) {
+                        postLog({
+                          role: "system",
+                          content: `[ASSISTANT_RUN ERROR] status=${res.status} ${res.statusText} body=${JSON.stringify(
+                            data
+                          ).slice(0, 600)}`,
+                          eventId: `assistant_run_err_${call.call_id}`,
+                        });
+                      } else {
+                        const answerPreview = String(data?.answer || data?.text || "").slice(0, 200);
+                        postLog({
+                          role: "system",
+                          content: `[ASSISTANT_RUN OK] thread_id=${String(data?.thread_id || "")} preview=${answerPreview}`,
+                          eventId: `assistant_run_ok_${call.call_id}`,
+                        });
+
+                        // ✅ 回寫 thread_id，讓下一次能延續同一條 assistant thread
+                        if (data?.thread_id && typeof data.thread_id === "string") {
+                          setAssistantThreadId(data.thread_id);
+                        }
+                      }
+
+                      sendClientEvent(
+                        {
+                          type: "conversation.item.create",
+                          item: {
+                            type: "function_call_output",
+                            call_id: call.call_id,
+                            output: JSON.stringify(data).slice(0, 20000),
+                          },
+                        },
+                        "(tool output: assistant_run)"
+                      );
+                      continue;
+                    }
+
+                    // 其他 tool：目前不處理
+                    postLog({
+                      role: "system",
+                      content: `[TOOL SKIPPED] name=${String(call.name)} (no handler)`,
+                      eventId: `tool_skipped_${call.call_id}`,
+                    });
+                  }
+
+                  // ✅ 工具都做完後，務必再觸發一次 response.create
+                  sendClientEvent({ type: "response.create" }, "(trigger response after tools)");
+                } catch (err) {
+                  console.error("💥 tool handler failed:", err);
+                  postLog({
+                    role: "system",
+                    content: `[TOOL FAILED] ${String(err).slice(0, 400)}`,
+                    eventId: `tool_fail_${Date.now()}`,
+                  });
+                }
+              })();
+            }
+
+            // ⚠️ 這次 done 是「工具回合」，不記 assistant 最終回答
+            conversationState.current.currentAssistantResponse = {
+              isActive: false,
+              responseId: null,
+              textBuffer: "",
+              audioTranscriptBuffer: "",
+              startTime: 0,
+            };
+            return;
+          }
+
+          // ✅ 7.1：一般「文字/語音回答」完成，照原本流程記錄
+          const assistantResponse = conversationState.current.currentAssistantResponse;
+          let finalText = assistantResponse.textBuffer.trim();
+
+          if (!finalText) {
+            if (assistantResponse.audioTranscriptBuffer.trim()) {
+              finalText = assistantResponse.audioTranscriptBuffer.trim();
+            }
+            if (!finalText) {
+              const response = eventData.response;
+              if (response?.output) {
+                finalText = extractTextFromOutput(response.output);
+              }
+            }
+            if (!finalText) {
+              finalText = (eventData.text || eventData.content || "").trim();
+            }
+          }
+
+          // 🔎 取 citations（若使用了 file_search）
+          try {
+            const citations = extractFileCitationsFromOutput(eventData?.response?.output);
+            if (citations?.length) {
+              postLog({
+                role: "system",
+                content: `[CITATIONS] ${JSON.stringify(citations).slice(0, 1000)}`,
+              });
+            }
+          } catch (err) {
+            console.warn("Citation extraction failed:", err);
+          }
+
+          if (finalText) {
+            const assistantMsg = {
+              content: finalText,
+              eventId:
+                assistantResponse.responseId || eventData.response?.id || eventData.id || `assistant_${Date.now()}`,
+              timestamp: Date.now(),
+            };
+
+            if (conversationState.current.currentUserMessage) {
+              logConversationPair(conversationState.current.currentUserMessage, assistantMsg);
+              conversationState.current.currentUserMessage = null;
+            } else {
+              reallyPostLog({
+                role: "assistant",
+                content: finalText,
+                eventId: assistantMsg.eventId,
+                timestamp: assistantMsg.timestamp,
+              }).catch((error) => {
+                console.error("💥 Error logging orphaned assistant response:", error);
+              });
+            }
+          } else {
+            postLog({
+              role: "system",
+              content: `[ERROR] Assistant response completed but no text extracted. Event: ${eventType}`,
+              eventId: `error_${Date.now()}`,
+            });
+          }
+
+          conversationState.current.currentAssistantResponse = {
+            isActive: false,
+            responseId: null,
+            textBuffer: "",
+            audioTranscriptBuffer: "",
+            startTime: 0,
+          };
+        }
+
+        // 8️⃣ 麥克風狀態
+        if (eventType === "input_audio_buffer.speech_started") {
+          setIsListening(true);
+        }
+        if (["input_audio_buffer.speech_stopped", "input_audio_buffer.committed"].includes(eventType)) {
+          setIsListening(false);
+        }
+
+        // 9️⃣ 錯誤處理
+        if (eventType === "error") {
+          console.error("❌ Realtime API error:", eventData);
+          postLog({
+            role: "system",
+            content: `[REALTIME ERROR] ${JSON.stringify(eventData).slice(0, 600)}`,
+            eventId: eventData?.event_id || `rt_error_${Date.now()}`,
+          });
+        }
+
+        const KNOWN_EVENTS = [
+          "session.created",
+          "session.updated",
+          "input_audio_buffer.speech_started",
+          "input_audio_buffer.speech_stopped",
+          "input_audio_buffer.committed",
+          "conversation.item.input_audio_transcription.completed",
+          "conversation.item.input_audio_transcription.failed",
+          "conversation.item.created",
+          "response.created",
+          "response.content_part.added",
+          "response.text.delta",
+          "response.output_text.delta",
+          "output_text.delta",
+          "response.text.done",
+          "response.output_text.done",
+          "output_text.done",
+          "response.content_part.done",
+          "response.done",
+          "response.completed",
+          "response.audio_transcript.delta",
+          "response.audio_transcript.done",
+          "response.audio.done",
+          "response.output_item.done",
+          "rate_limits.updated",
+          "output_audio_buffer.stopped",
+          "input_audio_buffer.cleared",
+        ];
+
+        if (!KNOWN_EVENTS.includes(eventType)) {
+          console.log("🔍 Unknown event:", eventType, eventData);
+        }
+      });
+
+      // ✅ 創建 WebRTC offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // ✅ 官方新版：ephemeral key 直接 POST 到 /v1/realtime/calls（不再用 ?model=...）
+      const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+        method: "POST",
+        body: offer.sdp,
+        headers: {
+          Authorization: `Bearer ${EPHEMERAL_KEY}`,
+          "Content-Type": "application/sdp",
+        },
+      });
+
+      if (!sdpResponse.ok) {
+        const errText = await sdpResponse.text().catch(() => "");
+        console.error("❌ Failed to establish WebRTC session:", sdpResponse.status, errText);
+        setSessionStatus("DISCONNECTED");
+        return;
+      }
+
+      await pc.setRemoteDescription({ type: "answer" as RTCSdpType, sdp: await sdpResponse.text() });
+      console.log("🎯 WebRTC connection established");
+    } catch (err) {
+      console.error("💥 Error connecting to realtime:", err);
+      setSessionStatus("DISCONNECTED");
+    }
+  }
+
+  function stopSession() {
+    if (dataChannel) {
+      dataChannel.close();
+      setDataChannel(null);
+    }
+    if (peerConnection.current) {
+      peerConnection.current.getSenders().forEach((sender) => sender.track && sender.track.stop());
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+    setSessionStatus("DISCONNECTED");
+    setIsListening(false);
+
+    conversationState.current = {
+      currentUserMessage: null,
+      currentAssistantResponse: {
+        isActive: false,
+        responseId: null,
+        textBuffer: "",
+        audioTranscriptBuffer: "",
+        startTime: 0,
+      },
+      conversationPairs: [],
+    };
+    loggedEventIds.current.clear();
+    processedToolCallIds.current.clear();
+    pendingLogsRef.current.length = 0;
+  }
+
+  /** ✅ 使用 agentConfig tools + 自動補上 web_search + assistant_run（若尚未定義） */
+  const updateSession = () => {
+    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear audio buffer on session update");
+    const currentAgent = selectedAgentConfigSet?.find(
+      (a) => a.name === " " + selectedAgentName || a.name === selectedAgentName
+    );
+
+    const turnDetection = isPTTActive
+      ? null
+      : {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 800,
+          create_response: true,
+        };
+
+    const instructions = `${currentAgent?.instructions || ""}
+
+- 當問題需要公司/內部文件或知識庫內容時，請先使用 file_search 檢索向量庫，並在回答中附上來源。
+- 當問題需要最新的外部資訊（新聞、價格、政策、版本更新）時，先呼叫 web_search，再用搜尋結果回答並附上來源。
+- 當你需要使用我們已配置好的 OpenAI Assistant（長指令/固定風格/長期狀態）來回答時，先呼叫 assistant_run，把使用者問題原文帶入；工具回傳的 JSON 會有 answer 欄位，請以 answer 為主輸出。`;
+
+    // ✅ web_search function tool（如果 agentConfig 沒定義，就補上）
+    const webSearchTool = {
+      type: "function",
+      name: "web_search",
+      description: "Search the public web for up-to-date info and return key points with sources.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query" },
+          recency_days: { type: "integer", description: "Prefer results within N days", default: 30 },
+          domains: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional allowlist of domains, e.g. ['openai.com','who.int']",
+          },
+        },
+        required: ["query"],
+      },
+    };
+
+    // ✅ assistant_run function tool（你後端會用 ASSISTANT_ID 執行 Assistants API）
+    const assistantRunTool = {
+      type: "function",
+      name: "assistant_run",
+      description:
+        "Run the configured OpenAI Assistant via server and return JSON with answer + thread_id.",
+      parameters: {
+        type: "object",
+        properties: {
+          input: { type: "string", description: "User request text" },
+          thread_id: { type: "string", description: "Existing assistant thread id (optional)" },
+        },
+        required: ["input"],
+      },
+    };
+
+    const baseTools = (currentAgent?.tools ?? []) as any[];
+    const hasWebSearch = baseTools.some((t) => t?.name === "web_search");
+    const hasAssistantRun = baseTools.some((t) => t?.name === "assistant_run");
+    const tools = [
+      ...baseTools,
+      ...(hasWebSearch ? [] : [webSearchTool]),
+      ...(hasAssistantRun ? [] : [assistantRunTool]),
+    ];
+
+    const sessionUpdateEvent = {
+      type: "session.update",
+      session: {
+        // ✅ 建議補上（與官方示例一致）
+        type: "realtime",
+        modalities: ["text", "audio"],
+        instructions,
+        voice: "shimmer",
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: turnDetection,
+        tools,
+        tool_choice: "auto",
+      },
+    };
+    sendClientEvent(sessionUpdateEvent, "agent.tools + web_search + assistant_run");
   };
 
   const cancelAssistantSpeech = async () => {
