@@ -153,13 +153,16 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
+    // ✅ 這裡一定要 await（你目前 Next 版本 cookies() 是 Promise）
+    const cookieStore = await cookies();
+
     let userId = cookieStore.get("anonId")?.value;
     const needSetCookie = !userId;
     if (!userId) userId = randomUUID();
 
     const sessionId = randomUUID();
 
+    // ✅ GA：建立 Realtime client secret（ephemeral key）
     const resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
@@ -171,23 +174,28 @@ export async function GET() {
         session: {
           type: "realtime",
           model: "gpt-realtime",
-          // 也可先塞音訊設定（可選）
           audio: { output: { voice: "shimmer" } },
         },
       }),
     });
 
     const data = await resp.json();
+
     if (!resp.ok) {
-      return NextResponse.json({ error: "OpenAI error", detail: data }, { status: resp.status });
+      console.error("OpenAI client_secrets error:", resp.status, data);
+      return NextResponse.json(
+        { error: "Failed to create realtime client secret", status: resp.status, details: data },
+        { status: 500 }
+      );
     }
 
-    // 注意：client_secrets 回的是頂層 value/expires_at
+    // ✅ 為了相容你前端舊寫法：仍回傳 client_secret.value
     const res = NextResponse.json({
       userId,
       sessionId,
-      client_secret: { value: data.value, expires_at: data.expires_at }, // 做成你前端期待的樣子
-      session: data.session,
+      // GA 回的是 data.value / data.expires_at，我們包成 client_secret 給前端用
+      client_secret: { value: data?.value, expires_at: data?.expires_at },
+      session: data?.session,
     });
 
     if (needSetCookie) {
@@ -210,7 +218,6 @@ export async function GET() {
     );
   }
 }
-
 
 
 
