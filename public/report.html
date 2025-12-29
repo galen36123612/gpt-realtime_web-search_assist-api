@@ -1,0 +1,4928 @@
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filters input[type="date"], .filters input[type="text"], .filters select {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: #fff; color: var(--text);
+    }
+    .btn {
+      padding: 8px 12px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--border); background: #fff;
+    }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .day {
+      margin-top: 14px;
+    }
+    .day .day-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; cursor: pointer;
+    }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      position: sticky; top: 0; background: #fafafa; z-index: 1;
+      border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap;
+    }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content {
+      white-space: pre-wrap; word-break: break-word; line-height: 1.4;
+      max-width: 560px;
+    }
+    .role-badge {
+      display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
+    }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+    .pill.err { border-color: #fecaca; background: #fef2f2; color: var(--danger); }
+    .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    .copy-btn {
+      font-size: 12px; padding: 4px 6px; border: 1px solid var(--border);
+      border-radius: 6px; background: #fff; cursor: pointer;
+    }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+      <div class="controls">
+        <button id="reloadBtn" class="btn">重新載入</button>
+        <button id="expandAllBtn" class="btn ghost">展開全部</button>
+        <button id="collapseAllBtn" class="btn ghost">全部收合</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <label>
+          起始日期
+          <input id="startDate" type="date" />
+        </label>
+        <label>
+          結束日期
+          <input id="endDate" type="date" />
+        </label>
+        <label>
+          搜尋（內容、ID）
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+        </label>
+        <label class="hint">
+          <input id="useUTC" type="checkbox" />
+          使用 UTC 顯示時間
+        </label>
+        <button id="applyFilterBtn" class="btn primary">套用過濾</button>
+        <span id="totalSummary" class="hint"></span>
+      </div>
+    </div>
+
+    <div id="daysRoot"></div>
+
+    <div class="footer">
+      來源：<code class="mono">/api/reports/daily?flat=1</code>（同網域）：將每筆 <span class="role-badge role-user">user</span> 與下一筆 <span class="role-badge role-assistant">assistant</span> 依序成對。出現孤兒訊息時會保留顯示。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 設定 ===
+  const API_URL = "/api/reports/daily?flat=1"; // 同網域
+  const daysRoot = document.getElementById("daysRoot");
+  const reloadBtn = document.getElementById("reloadBtn");
+  const expandAllBtn = document.getElementById("expandAllBtn");
+  const collapseAllBtn = document.getElementById("collapseAllBtn");
+  const startDateEl = document.getElementById("startDate");
+  const endDateEl = document.getElementById("endDate");
+  const searchInput = document.getElementById("searchInput");
+  const applyFilterBtn = document.getElementById("applyFilterBtn");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  let rawLogs = [];
+  let viewLogs = [];
+
+  reloadBtn.addEventListener("click", loadAndRender);
+  applyFilterBtn.addEventListener("click", render);
+  expandAllBtn.addEventListener("click", () => setAllDaysOpen(true));
+  collapseAllBtn.addEventListener("click", () => setAllDaysOpen(false));
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") render(); });
+
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs;
+    return [];
+  }
+
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const start = startDateEl.value ? new Date(startDateEl.value + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endDateEl.value ? new Date(endDateEl.value + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    // 依時間排序
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    // 依日期排序（新到舊）
+    const entries = [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+    return entries;
+  }
+
+  // 將「依時間排序」的單日 log 做「成對」
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        // 如果有尚未配對的 user，先推入（assistant 為 null 的孤兒）
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: null });
+        }
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          // 沒有相對應 user，當成孤兒 assistant
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        // 其他角色（system 等）以單獨一列顯示
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  function render() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn ghost" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // 事件：展開/收合
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      // 事件：匯出 CSV
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+  }
+
+  function setAllDaysOpen(open) {
+    document.querySelectorAll(".day").forEach(el => {
+      if (open) el.classList.add("open"); else el.classList.remove("open");
+    });
+  }
+
+  function buildCSV(pairs) {
+    const headers = [
+      "index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"
+    ];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  async function loadAndRender() {
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+    try {
+      const res = await fetch(API_URL, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const arr = parseJSONFlexible(data);
+
+      // 僅接受擁有必要欄位的紀錄
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts)); // 總序時間排序
+
+      // 預設展開最近一天
+      render();
+      const firstDay = document.querySelector(".day");
+      if (firstDay) firstDay.classList.add("open");
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域可互通。</div>`;
+    }
+  }
+
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filters input[type="date"], .filters input[type="text"], .filters select {
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text);
+    }
+    .btn { padding: 8px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); background: #fff; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+    .pill.err { border-color: #fecaca; background: #fef2f2; color: var(--danger); }
+    .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+      <div class="controls">
+        <button id="reloadBtn" class="btn">重新載入</button>
+        <button id="expandAllBtn" class="btn ghost">展開全部</button>
+        <button id="collapseAllBtn" class="btn ghost">全部收合</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <label>
+          起始日期
+          <input id="startDate" type="date" />
+        </label>
+        <label>
+          結束日期
+          <input id="endDate" type="date" />
+        </label>
+        <label>
+          搜尋（內容、ID）
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+        </label>
+        <label class="hint">
+          <input id="useUTC" type="checkbox" />
+          使用 UTC 顯示時間
+        </label>
+        <button id="applyFilterBtn" class="btn primary">套用過濾</button>
+        <span id="totalSummary" class="hint"></span>
+      </div>
+    </div>
+
+    <div id="daysRoot"></div>
+
+    <div class="footer">
+      來源：<code class="mono">/api/reports/daily?flat=1</code>；如選日期，會逐日呼叫 <code class="mono">&day=YYYY-MM-DD</code> 合併顯示。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 設定（同網域）===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const daysRoot = document.getElementById("daysRoot");
+  const reloadBtn = document.getElementById("reloadBtn");
+  const expandAllBtn = document.getElementById("expandAllBtn");
+  const collapseAllBtn = document.getElementById("collapseAllBtn");
+  const startDateEl = document.getElementById("startDate");
+  const endDateEl = document.getElementById("endDate");
+  const searchInput = document.getElementById("searchInput");
+  const applyFilterBtn = document.getElementById("applyFilterBtn");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  let rawLogs = [];
+  let viewLogs = [];
+
+  reloadBtn.addEventListener("click", loadAndRender);
+  // 重要：選了日期後要重新抓資料
+  applyFilterBtn.addEventListener("click", loadAndRender);
+  expandAllBtn.addEventListener("click", () => setAllDaysOpen(true));
+  collapseAllBtn.addEventListener("click", () => setAllDaysOpen(false));
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") render(); });
+
+  // 複製按鈕（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs; // ← 你的 API
+    return [];
+  }
+
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const start = startDateEl.value ? new Date(startDateEl.value + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endDateEl.value ? new Date(endDateEl.value + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    const entries = [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+    return entries;
+  }
+
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  function render() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn ghost" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+  }
+
+  function setAllDaysOpen(open) {
+    document.querySelectorAll(".day").forEach(el => {
+      if (open) el.classList.add("open"); else el.classList.remove("open");
+    });
+  }
+
+  function buildCSV(pairs) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00");
+    const end = new Date((to || from) + "T00:00:00");
+    const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = startDateEl.value; // YYYY-MM-DD 或空
+    const endVal = endDateEl.value;
+
+    // Loading 狀態
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+
+    try {
+      let arr = [];
+
+      if (!startVal && !endVal) {
+        // 沒指定 → 取「今天」（你的 API 預設 day=tpeDay）
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal;
+        const to = endVal || startVal || from;
+        const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(
+          days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`))
+        );
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+
+      render();
+      const firstDay = document.querySelector(".day");
+      if (firstDay) firstDay.classList.add("open");
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!-- 0822 V1 -->
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+    /* 篩選列 */
+    .filters { display: grid; gap: 10px; grid-template-columns: 1fr; align-items: end; }
+    @media (min-width: 900px) {
+      .filters { grid-template-columns: auto auto 1fr auto auto; }
+    }
+    .picker-group { display: grid; gap: 6px; }
+    .picker-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .picker { display: flex; gap: 6px; align-items: center; }
+    .picker label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 10px; background: #fff; color: var(--text);
+      min-width: 86px;
+    }
+    /* 行動裝置上 select 會呈現「滾輪式」；桌機上是下拉清單 */
+    .btn {
+      padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .hint { font-size: 12px; color: var(--muted); }
+    .inline { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 每日區塊與表格 */
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <div class="picker-group">
+          <div class="picker-row">
+            <div class="picker">
+              <label>起始日期</label>
+              <select id="startYear"></select>
+              <select id="startMonth"></select>
+              <select id="startDay"></select>
+            </div>
+          </div>
+          <div class="picker-row">
+            <div class="picker">
+              <label>結束日期</label>
+              <select id="endYear"></select>
+              <select id="endMonth"></select>
+              <select id="endDay"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-group">
+          <label>搜尋（內容、ID）</label>
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+          <div class="inline">
+            <input id="useUTC" type="checkbox" />
+            <span class="hint">使用 UTC 顯示時間</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:end; justify-content:flex-end;">
+          <button id="applyBtn" class="btn">套用</button>
+        </div>
+
+        <div style="display:flex; align-items:center;">
+          <span id="totalSummary" class="hint"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="daysRoot"></div>
+
+    <div class="footer">
+      資料來源：<code class="mono">/api/reports/daily?flat=1</code>；選定日期後會逐日請求 <code class="mono">&day=YYYY-MM-DD</code> 並合併顯示。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 常數 / 元件 ===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const daysRoot = document.getElementById("daysRoot");
+  const applyBtn = document.getElementById("applyBtn");
+  const searchInput = document.getElementById("searchInput");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  // 日期選擇器元素
+  const sY = document.getElementById("startYear");
+  const sM = document.getElementById("startMonth");
+  const sD = document.getElementById("startDay");
+  const eY = document.getElementById("endYear");
+  const eM = document.getElementById("endMonth");
+  const eD = document.getElementById("endDay");
+
+  let rawLogs = [];
+  let viewLogs = [];
+
+  // 事件
+  applyBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") render(); });
+  useUTCEl.addEventListener("change", render);
+
+  // 複製（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  // ===== 日期選擇器 =====
+  const YEARS_BACK = 5; // 顯示最近 N 年
+  initPickers();
+
+  function initPickers() {
+    const now = new Date();
+    const cy = now.getFullYear();
+    fillYear(sY, cy, YEARS_BACK);
+    fillYear(eY, cy, YEARS_BACK);
+    fillMonth(sM);
+    fillMonth(eM);
+    refreshDays("start");
+    refreshDays("end");
+    // 預設起始/結束 = 今天
+    setPickerDate("start", toYMD(now));
+    setPickerDate("end", toYMD(now));
+
+    // 當年或月改變時，重新計算天數
+    [sY, sM].forEach(el => el.addEventListener("change", () => refreshDays("start")));
+    [eY, eM].forEach(el => el.addEventListener("change", () => refreshDays("end")));
+  }
+
+  function fillYear(sel, currentYear, back) {
+    sel.innerHTML = "";
+    for (let y = currentYear; y >= currentYear - back; y--) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = `${y} 年`;
+      sel.appendChild(opt);
+    }
+  }
+  function fillMonth(sel) {
+    sel.innerHTML = "";
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `${m} 月`;
+      sel.appendChild(opt);
+    }
+  }
+  function refreshDays(prefix) {
+    const ySel = prefix === "start" ? sY : eY;
+    const mSel = prefix === "start" ? sM : eM;
+    const dSel = prefix === "start" ? sD : eD;
+    const year = parseInt(ySel.value, 10);
+    const month = parseInt(mSel.value, 10);
+    const max = daysInMonth(year, month);
+    const prev = dSel.value;
+    dSel.innerHTML = "";
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement("option");
+      opt.value = String(d).padStart(2, "0");
+      opt.textContent = `${d} 日`;
+      dSel.appendChild(opt);
+    }
+    // 嘗試保留原選擇，否則預設 1 日
+    if ([...dSel.options].some(o => o.value === prev)) dSel.value = prev;
+  }
+  function daysInMonth(year, month) {
+    return new Date(year, month, 0).getDate(); // month 為 1~12
+    // 例：new Date(2025, 2, 0).getDate() => 2025/02 有幾天
+  }
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function setPickerDate(prefix, ymd) {
+    const [y, m, d] = ymd.split("-");
+    if (prefix === "start") {
+      if (y) sY.value = y;
+      if (m) sM.value = m;
+      refreshDays("start");
+      if (d) sD.value = d;
+    } else {
+      if (y) eY.value = y;
+      if (m) eM.value = m;
+      refreshDays("end");
+      if (d) eD.value = d;
+    }
+  }
+  function getPickerDate(prefix) {
+    const y = (prefix === "start" ? sY : eY).value;
+    const m = (prefix === "start" ? sM : eM).value;
+    const d = (prefix === "start" ? sD : eD).value;
+    if (!y || !m || !d) return "";
+    return `${y}-${m}-${d}`;
+  }
+
+  // ===== 其餘工具 =====
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs; // 你的 API
+    return [];
+  }
+
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const startStr = getPickerDate("start");
+    const endStr = getPickerDate("end");
+    const start = startStr ? new Date(startStr + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endStr ? new Date(endStr + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    const entries = [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+    return entries;
+  }
+
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  function render() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn ghost" style="border-color:#ddd;color:#444;background:#fff;" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+
+    // 預設展開最上面那一天
+    const firstDay = document.querySelector(".day");
+    if (firstDay) firstDay.classList.add("open");
+  }
+
+  function buildCSV(pairs) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00");
+    const end = new Date((to || from) + "T00:00:00");
+    const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = getPickerDate("start"); // YYYY-MM-DD
+    const endVal = getPickerDate("end");
+
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+
+    try {
+      let arr = [];
+
+      if (!startVal && !endVal) {
+        // 未完整選日期 → 取今天
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal;
+        const to = endVal || startVal || from;
+        const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(
+          days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`))
+        );
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+
+      render();
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  // 首次載入：以今天為起迄
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!-- 0822 put claster -->
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+    /* 篩選列 */
+    .filters { display: grid; gap: 10px; grid-template-columns: 1fr; align-items: end; }
+    @media (min-width: 900px) {
+      .filters { grid-template-columns: auto auto 1fr auto auto; }
+    }
+    .picker-group { display: grid; gap: 6px; }
+    .picker-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .picker { display: flex; gap: 6px; align-items: center; }
+    .picker label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 10px; background: #fff; color: var(--text);
+      min-width: 86px;
+    }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .btn.sec { background: #fff; color: var(--text); border-color: var(--border); }
+    .hint { font-size: 12px; color: var(--muted); }
+    .inline { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 排行榜 */
+    .leader { margin-top: 10px; }
+    .leader h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .leader .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .leader .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:8px; }
+    .leader table { width:100%; border-collapse:collapse; font-size:14px; }
+    .leader thead th { position:sticky; top:0; background:#fafafa; z-index:1; border-bottom:1px solid var(--border); text-align:left; padding:10px; white-space:nowrap; }
+    .leader tbody td { border-bottom:1px solid var(--border); padding:10px; vertical-align:top; }
+    .leader .sample { color:#374151; }
+    .chip { display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:2px 6px; border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:12px; }
+
+    /* 每日區塊與表格（明細） */
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <div class="picker-group">
+          <div class="picker-row">
+            <div class="picker">
+              <label>起始日期</label>
+              <select id="startYear"></select>
+              <select id="startMonth"></select>
+              <select id="startDay"></select>
+            </div>
+          </div>
+          <div class="picker-row">
+            <div class="picker">
+              <label>結束日期</label>
+              <select id="endYear"></select>
+              <select id="endMonth"></select>
+              <select id="endDay"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-group">
+          <label>搜尋（內容、ID）</label>
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+          <div class="inline">
+            <input id="useUTC" type="checkbox" />
+            <span class="hint">使用 UTC 顯示時間</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:end; justify-content:flex-end;">
+          <button id="applyBtn" class="btn">套用</button>
+        </div>
+
+        <div style="display:flex; align-items:center;">
+          <span id="totalSummary" class="hint"></span>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="card leader">
+      <h3>熱門問題排行榜（依使用者訊息 & 相似度分組）</h3>
+      <div class="controls">
+        <label>分組嚴格度
+          <select id="clusterLevel">
+            <option value="strict">嚴格（相似度 ≥ 0.90）</option>
+            <option value="medium" selected>中等（相似度 ≥ 0.80）</option>
+            <option value="loose">寬鬆（相似度 ≥ 0.72）</option>
+          </select>
+        </label>
+        <label>只統計長度 ≥
+          <select id="minLen">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+          </select>
+          字
+        </label>
+        <button id="exportRankBtn" class="btn sec">下載 CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table id="leaderTable">
+          <thead>
+            <tr>
+              <th style="width:56px;">#</th>
+              <th>代表問題</th>
+              <th>次數</th>
+              <th>近期例句</th>
+              <th>最近詢問時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <div id="daysRoot" style="margin-top:12px;"></div>
+
+    <div class="footer">
+      資料來源：<code class="mono">/api/reports/daily?flat=1</code>；選定日期後逐日請求 <code class="mono">&day=YYYY-MM-DD</code> 合併顯示。<br/>
+      排行榜分組：同義詞正規化 + 中/英混合 shingle 相似度（Jaccard）。可用「分組嚴格度」調整門檻。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 常數 / 元件 ===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const daysRoot = document.getElementById("daysRoot");
+  const applyBtn = document.getElementById("applyBtn");
+  const searchInput = document.getElementById("searchInput");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  // Leaderboard
+  const clusterLevelEl = document.getElementById("clusterLevel");
+  const minLenEl = document.getElementById("minLen");
+  const exportRankBtn = document.getElementById("exportRankBtn");
+  const leaderTableBody = document.querySelector("#leaderTable tbody");
+
+  // 日期選擇器元素
+  const sY = document.getElementById("startYear");
+  const sM = document.getElementById("startMonth");
+  const sD = document.getElementById("startDay");
+  const eY = document.getElementById("endYear");
+  const eM = document.getElementById("endMonth");
+  const eD = document.getElementById("endDay");
+
+  let rawLogs = [];
+  let viewLogs = [];
+  let clustersCache = [];
+
+  // 事件
+  applyBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") renderAll(); });
+  useUTCEl.addEventListener("change", renderAll);
+  clusterLevelEl.addEventListener("change", renderLeaderboardOnly);
+  minLenEl.addEventListener("change", renderLeaderboardOnly);
+  exportRankBtn.addEventListener("click", exportLeaderboardCSV);
+
+  // 複製（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  // ===== 日期選擇器 =====
+  const YEARS_BACK = 5; // 顯示最近 N 年
+  initPickers();
+
+  function initPickers() {
+    const now = new Date();
+    const cy = now.getFullYear();
+    fillYear(sY, cy, YEARS_BACK);
+    fillYear(eY, cy, YEARS_BACK);
+    fillMonth(sM);
+    fillMonth(eM);
+    refreshDays("start");
+    refreshDays("end");
+    setPickerDate("start", toYMD(now));
+    setPickerDate("end", toYMD(now));
+
+    [sY, sM].forEach(el => el.addEventListener("change", () => refreshDays("start")));
+    [eY, eM].forEach(el => el.addEventListener("change", () => refreshDays("end")));
+  }
+
+  function fillYear(sel, currentYear, back) {
+    sel.innerHTML = "";
+    for (let y = currentYear; y >= currentYear - back; y--) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = `${y} 年`;
+      sel.appendChild(opt);
+    }
+  }
+  function fillMonth(sel) {
+    sel.innerHTML = "";
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `${m} 月`;
+      sel.appendChild(opt);
+    }
+  }
+  function refreshDays(prefix) {
+    const ySel = prefix === "start" ? sY : eY;
+    const mSel = prefix === "start" ? sM : eM;
+    const dSel = prefix === "start" ? sD : eD;
+    const year = parseInt(ySel.value, 10);
+    const month = parseInt(mSel.value, 10);
+    const max = daysInMonth(year, month);
+    const prev = dSel.value;
+    dSel.innerHTML = "";
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement("option");
+      opt.value = String(d).padStart(2, "0");
+      opt.textContent = `${d} 日`;
+      dSel.appendChild(opt);
+    }
+    if ([...dSel.options].some(o => o.value === prev)) dSel.value = prev;
+  }
+  function daysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+  }
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function setPickerDate(prefix, ymd) {
+    const [y, m, d] = ymd.split("-");
+    if (prefix === "start") {
+      if (y) sY.value = y;
+      if (m) sM.value = m;
+      refreshDays("start");
+      if (d) sD.value = d;
+    } else {
+      if (y) eY.value = y;
+      if (m) eM.value = m;
+      refreshDays("end");
+      if (d) eD.value = d;
+    }
+  }
+  function getPickerDate(prefix) {
+    const y = (prefix === "start" ? sY : eY).value;
+    const m = (prefix === "start" ? sM : eM).value;
+    const d = (prefix === "start" ? sD : eD).value;
+    if (!y || !m || !d) return "";
+    return `${y}-${m}-${d}`;
+  }
+
+  // ===== 文本正規化與相似度 =====
+  function toHalfWidth(str) {
+    return (str || "").replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+  }
+  const synonymRules = [
+    // 常見疑問詞
+    [/哪裏|哪裡|哪儿|哪兒|哪边|哪邊|何處|哪個地方|在哪裡|在那裡|在哪/g, "哪裡"],
+    [/怎麼|怎樣|怎麼樣/g, "如何"],
+    [/推薦|建議/g, "推薦"],
+
+    // 購買 / 價格
+    [/買得到|買的到|買得到嗎|買得到呢|購買到|哪裡買|在哪買|哪裏買|哪裡購買|哪裡買到|哪裡買得到|哪裡可以買|哪裡能買|哪裡買賣/g, "購買"],
+    [/售價|價錢|價位|費用/g, "價格"],
+
+    // 品牌/產品（可依你的資料再擴充）
+    [/威德\s*益生菌|weider\s*益生菌|weider\s*probiotic(s)?|威德probiotic/gi, "威德益生菌"],
+  ];
+  function normalizeForGrouping(s) {
+    let t = toHalfWidth((s || "").trim().toLowerCase());
+    // 移除標點與多餘空白（保留空白做英文 token）
+    t = t.replace(/[~`!@#$%^&*()\-_=+\[\]{}\\|;:'",.<>/?，。？！；：、（）【】《》「」『』—…·]/g, " ");
+    synonymRules.forEach(([re, rep]) => { t = t.replace(re, rep); });
+    // 數字歸一（避免價格/日期造成分裂）
+    t = t.replace(/\d+/g, "0");
+    // 合併多個空白
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  }
+  function charBigrams(s) {
+    const arr = [];
+    const t = s.replace(/\s+/g, "");
+    for (let i=0; i < t.length - 1; i++) arr.push(t.slice(i, i+2));
+    return arr;
+  }
+  function jaccard(a, b) {
+    if (!a.size && !b.size) return 1;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter++;
+    const uni = a.size + b.size - inter;
+    return uni === 0 ? 0 : inter / uni;
+  }
+  function buildSignature(norm) {
+    // 混合：字元雙連 + 英文/中文以空白分詞的 token
+    const tokens = norm ? norm.split(/\s+/) : [];
+    const shingles = new Set([...charBigrams(norm || ""), ...tokens]);
+    return shingles;
+  }
+  function levelToThreshold(level) {
+    if (level === "strict") return 0.90;
+    if (level === "loose") return 0.72;
+    return 0.80; // medium
+  }
+
+  // ===== 排行榜（分群） =====
+  function clusterQuestions(userLogs, level, minLen) {
+    const threshold = levelToThreshold(level);
+    const clusters = [];
+    for (const item of userLogs) {
+      const raw = (item.content || "").trim();
+      const norm = normalizeForGrouping(raw);
+      if (!norm || norm.length < minLen) continue;
+
+      const sig = buildSignature(norm);
+
+      // 與既有群比對
+      let bestIdx = -1, bestSim = 0;
+      for (let i = 0; i < clusters.length; i++) {
+        const c = clusters[i];
+        // 先做廉價檢查：如果代表字串包含彼此，給點加分
+        let sim = jaccard(sig, c.sig);
+        if (c.norm.includes(norm) || norm.includes(c.norm)) sim = Math.max(sim, 0.9);
+        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+      }
+      if (bestSim >= threshold && bestIdx >= 0) {
+        const c = clusters[bestIdx];
+        c.count += 1;
+        c.examples.push(raw);
+        if (!c.lastTs || new Date(item.ts) > new Date(c.lastTs)) c.lastTs = item.ts;
+      } else {
+        clusters.push({
+          repr: raw,      // 第一個樣例
+          norm,
+          sig,
+          count: 1,
+          examples: [raw],
+          lastTs: item.ts,
+        });
+      }
+    }
+
+    // 排序：次數 desc，其次最近詢問時間 desc
+    clusters.sort((a, b) => (b.count - a.count) || (new Date(b.lastTs) - new Date(a.lastTs)));
+    return clusters;
+  }
+
+  function renderLeaderboard(clusters) {
+    clustersCache = clusters;
+    leaderTableBody.innerHTML = "";
+    const useUTC = useUTCEl.checked;
+
+    clusters.slice(0, 50).forEach((c, idx) => {
+      const tr = document.createElement("tr");
+      const examples = c.examples.slice(-3).reverse(); // 最近的 3 筆做為例句
+      tr.innerHTML = `
+        <td class="mono">${idx + 1}</td>
+        <td class="sample">${escapeHTML(c.repr)}</td>
+        <td class="mono">${c.count}</td>
+        <td>${examples.map(e => `<span class="chip">${escapeHTML(e)}</span>`).join(" ")}</td>
+        <td class="mono">${fmtTime(c.lastTs, useUTC)}</td>
+      `;
+      leaderTableBody.appendChild(tr);
+    });
+
+    if (clusters.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="5" class="hint" style="text-align:center;">此區間沒有可統計的使用者問題。</td>`;
+      leaderTableBody.appendChild(tr);
+    }
+  }
+
+  function exportLeaderboardCSV() {
+    if (!clustersCache.length) return;
+    const useUTC = useUTCEl.checked;
+    const rows = [["rank","count","repr","last_time","examples"]];
+    clustersCache.forEach((c, i) => {
+      const examples = c.examples.slice(-5).join(" | ");
+      rows.push([i+1, c.count, c.repr, fmtTime(c.lastTs, useUTC), examples]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `weider_digest_rank_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ===== 其餘工具 =====
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs;
+    return [];
+  }
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const startStr = getPickerDate("start");
+    const endStr = getPickerDate("end");
+    const start = startStr ? new Date(startStr + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endStr ? new Date(endStr + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    const entries = [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+    return entries;
+  }
+
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  // ===== 渲染：排行榜 + 明細 =====
+  function renderAll() {
+    renderLeaderboardOnly();
+    renderDetails();
+  }
+  function renderLeaderboardOnly() {
+    const filtered = applyFilters(rawLogs);
+    // 只取 user 的訊息
+    const userLogs = filtered.filter(x => x.role === "user");
+    const clusters = clusterQuestions(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+    renderLeaderboard(clusters);
+  }
+  function renderDetails() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn sec" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+
+    const firstDay = document.querySelector(".day");
+    if (firstDay) firstDay.classList.add("open");
+  }
+
+  function buildCSV(pairs) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00");
+    const end = new Date((to || from) + "T00:00:00");
+    const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = getPickerDate("start");
+    const endVal = getPickerDate("end");
+
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+
+    try {
+      let arr = [];
+
+      if (!startVal && !endVal) {
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal;
+        const to = endVal || startVal || from;
+        const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(
+          days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`))
+        );
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+
+      renderAll();
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  // 首次載入：以今天為起迄
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!-- 0822 V2 AI cluster -->
+
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+    /* 篩選列 */
+    .filters { display: grid; gap: 10px; grid-template-columns: 1fr; align-items: end; }
+    @media (min-width: 900px) {
+      .filters { grid-template-columns: auto auto 1fr auto auto; }
+    }
+    .picker-group { display: grid; gap: 6px; }
+    .picker-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .picker { display: flex; gap: 6px; align-items: center; }
+    .picker label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 10px; background: #fff; color: var(--text);
+      min-width: 86px;
+    }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .btn.sec { background: #fff; color: var(--text); border-color: var(--border); }
+    .hint { font-size: 12px; color: var(--muted); }
+    .inline { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 排行榜 */
+    .leader { margin-top: 10px; }
+    .leader h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .leader .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .leader .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:8px; }
+    .leader table { width:100%; border-collapse:collapse; font-size:14px; }
+    .leader thead th { position:sticky; top:0; background:#fafafa; z-index:1; border-bottom:1px solid var(--border); text-align:left; padding:10px; white-space:nowrap; }
+    .leader tbody td { border-bottom:1px solid var(--border); padding:10px; vertical-align:top; }
+    .leader .sample { color:#374151; }
+    .chip { display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:2px 6px; border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:12px; }
+    .badge { display:inline-block; padding:2px 6px; border-radius:6px; font-size:12px; border:1px solid var(--border); background:#fff; color:#374151; }
+
+    /* 每日區塊與表格（明細） */
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <div class="picker-group">
+          <div class="picker-row">
+            <div class="picker">
+              <label>起始日期</label>
+              <select id="startYear"></select>
+              <select id="startMonth"></select>
+              <select id="startDay"></select>
+            </div>
+          </div>
+          <div class="picker-row">
+            <div class="picker">
+              <label>結束日期</label>
+              <select id="endYear"></select>
+              <select id="endMonth"></select>
+              <select id="endDay"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-group">
+          <label>搜尋（內容、ID）</label>
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+          <div class="inline">
+            <input id="useUTC" type="checkbox" />
+            <span class="hint">使用 UTC 顯示時間</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:end; justify-content:flex-end;">
+          <button id="applyBtn" class="btn">套用</button>
+        </div>
+
+        <div style="display:flex; align-items:center;">
+          <span id="totalSummary" class="hint"></span>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="card leader">
+      <h3>熱門問題排行榜（依使用者訊息 & 相似度分組）</h3>
+      <div class="controls">
+        <label>分組嚴格度
+          <select id="clusterLevel">
+            <option value="strict">嚴格（相似度 ≥ 0.90）</option>
+            <option value="medium" selected>中等（相似度 ≥ 0.80）</option>
+            <option value="loose">寬鬆（相似度 ≥ 0.72）</option>
+          </select>
+        </label>
+        <label>只統計長度 ≥
+          <select id="minLen">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+          </select>
+          字
+        </label>
+        <label class="inline">
+          <input id="useAICluster" type="checkbox" />
+          使用 AI 分群（伺服器）
+        </label>
+        <label class="inline">
+          <input id="includeAnswer" type="checkbox" checked />
+          分群時納入助理回答
+        </label>
+        <label>
+          方法
+          <select id="method">
+            <option value="embeddings" selected>Embeddings（推薦）</option>
+            <option value="judge">4o-mini 補判（實驗）</option>
+          </select>
+        </label>
+        <button id="exportRankBtn" class="btn sec">下載 CSV</button>
+        <span id="clusterSource" class="badge">目前：本地分群</span>
+      </div>
+
+      <div class="table-wrap">
+        <table id="leaderTable">
+          <thead>
+            <tr>
+              <th style="width:56px;">#</th>
+              <th>代表問題</th>
+              <th>次數</th>
+              <th>近期例句</th>
+              <th>最近詢問時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <div id="daysRoot" style="margin-top:12px;"></div>
+
+    <div class="footer">
+      資料來源：<code class="mono">/api/reports/daily?flat=1</code>；選定日期後逐日請求 <code class="mono">&day=YYYY-MM-DD</code> 合併顯示。<br/>
+      排行榜分組：同義詞正規化 + 中/英混合 shingle 相似度（Jaccard），並可切換伺服器端 AI 分群（Q+A 向量 / 近門檻補判）。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 常數 / 元件 ===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const daysRoot = document.getElementById("daysRoot");
+  const applyBtn = document.getElementById("applyBtn");
+  const searchInput = document.getElementById("searchInput");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  // Leaderboard controls
+  const clusterLevelEl = document.getElementById("clusterLevel");
+  const minLenEl = document.getElementById("minLen");
+  const exportRankBtn = document.getElementById("exportRankBtn");
+  const leaderTableBody = document.querySelector("#leaderTable tbody");
+  const useAIClusterEl = document.getElementById("useAICluster");
+  const includeAnswerEl = document.getElementById("includeAnswer");
+  const methodEl = document.getElementById("method");
+  const clusterSource = document.getElementById("clusterSource");
+
+  // 日期選擇器元素
+  const sY = document.getElementById("startYear");
+  const sM = document.getElementById("startMonth");
+  const sD = document.getElementById("startDay");
+  const eY = document.getElementById("endYear");
+  const eM = document.getElementById("endMonth");
+  const eD = document.getElementById("endDay");
+
+  let rawLogs = [];
+  let viewLogs = [];
+  let clustersCache = [];
+
+  // 事件
+  applyBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") renderAll(); });
+  useUTCEl.addEventListener("change", renderAll);
+  clusterLevelEl.addEventListener("change", renderLeaderboardOnly);
+  minLenEl.addEventListener("change", renderLeaderboardOnly);
+  exportRankBtn.addEventListener("click", exportLeaderboardCSV);
+  [useAIClusterEl, includeAnswerEl, methodEl].forEach(el => el.addEventListener("change", renderLeaderboardOnly));
+
+  // 複製（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  // ===== 日期選擇器 =====
+  const YEARS_BACK = 5; // 顯示最近 N 年
+  initPickers();
+
+  function initPickers() {
+    const now = new Date();
+    const cy = now.getFullYear();
+    fillYear(sY, cy, YEARS_BACK);
+    fillYear(eY, cy, YEARS_BACK);
+    fillMonth(sM);
+    fillMonth(eM);
+    refreshDays("start");
+    refreshDays("end");
+    setPickerDate("start", toYMD(now));
+    setPickerDate("end", toYMD(now));
+
+    [sY, sM].forEach(el => el.addEventListener("change", () => refreshDays("start")));
+    [eY, eM].forEach(el => el.addEventListener("change", () => refreshDays("end")));
+  }
+
+  function fillYear(sel, currentYear, back) {
+    sel.innerHTML = "";
+    for (let y = currentYear; y >= currentYear - back; y--) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = `${y} 年`;
+      sel.appendChild(opt);
+    }
+  }
+  function fillMonth(sel) {
+    sel.innerHTML = "";
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `${m} 月`;
+      sel.appendChild(opt);
+    }
+  }
+  function refreshDays(prefix) {
+    const ySel = prefix === "start" ? sY : eY;
+    const mSel = prefix === "start" ? sM : eM;
+    const dSel = prefix === "start" ? sD : eD;
+    const year = parseInt(ySel.value, 10);
+    const month = parseInt(mSel.value, 10);
+    const max = daysInMonth(year, month);
+    const prev = dSel.value;
+    dSel.innerHTML = "";
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement("option");
+      opt.value = String(d).padStart(2, "0");
+      opt.textContent = `${d} 日`;
+      dSel.appendChild(opt);
+    }
+    if ([...dSel.options].some(o => o.value === prev)) dSel.value = prev;
+  }
+  function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function setPickerDate(prefix, ymd) {
+    const [y, m, d] = ymd.split("-");
+    if (prefix === "start") {
+      if (y) sY.value = y;
+      if (m) sM.value = m;
+      refreshDays("start");
+      if (d) sD.value = d;
+    } else {
+      if (y) eY.value = y;
+      if (m) eM.value = m;
+      refreshDays("end");
+      if (d) eD.value = d;
+    }
+  }
+  function getPickerDate(prefix) {
+    const y = (prefix === "start" ? sY : eY).value;
+    const m = (prefix === "start" ? sM : eM).value;
+    const d = (prefix === "start" ? sD : eD).value;
+    if (!y || !m || !d) return "";
+    return `${y}-${m}-${d}`;
+  }
+
+  // ===== 文本正規化與相似度（本地演算法） =====
+  function toHalfWidth(str) {
+    return (str || "").replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+  }
+  const synonymRules = [
+    [/哪裏|哪裡|哪儿|哪兒|哪边|哪邊|何處|哪個地方|在哪裡|在那裡|在哪/g, "哪裡"],
+    [/怎麼|怎樣|怎麼樣/g, "如何"],
+    [/推薦|建議/g, "推薦"],
+    [/買得到|買的到|買得到嗎|買得到呢|購買到|哪裡買|在哪買|哪裏買|哪裡購買|哪裡買到|哪裡買得到|哪裡可以買|哪裡能買|哪裡買賣/g, "購買"],
+    [/售價|價錢|價位|費用/g, "價格"],
+    [/威德\s*益生菌|weider\s*益生菌|weider\s*probiotic(s)?|威德probiotic/gi, "威德益生菌"],
+  ];
+  function normalizeForGrouping(s) {
+    let t = toHalfWidth((s || "").trim().toLowerCase());
+    t = t.replace(/[~`!@#$%^&*()\-_=+\[\]{}\\|;:'",.<>\/?，。？！；：、（）【】《》「」『』—…·]/g, " ");
+    synonymRules.forEach(([re, rep]) => { t = t.replace(re, rep); });
+    t = t.replace(/\d+/g, "0");
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  }
+  function charBigrams(s) {
+    const arr = []; const t = s.replace(/\s+/g, "");
+    for (let i=0; i < t.length - 1; i++) arr.push(t.slice(i, i+2));
+    return arr;
+  }
+  function jaccardSet(a, b) {
+    if (!a.size && !b.size) return 1;
+    let inter = 0; for (const x of a) if (b.has(x)) inter++;
+    const uni = a.size + b.size - inter; return uni === 0 ? 0 : inter / uni;
+  }
+  function buildSignature(norm) {
+    const tokens = norm ? norm.split(/\s+/) : [];
+    return new Set([...charBigrams(norm || ""), ...tokens]);
+  }
+  function levelToThreshold(level) {
+    if (level === "strict") return 0.90; if (level === "loose") return 0.72; return 0.80;
+  }
+  function clusterQuestions(userLogs, level, minLen) {
+    const threshold = levelToThreshold(level);
+    const clusters = [];
+    for (const item of userLogs) {
+      const raw = (item.content || "").trim();
+      const norm = normalizeForGrouping(raw);
+      if (!norm || norm.length < minLen) continue;
+      const sig = buildSignature(norm);
+      let bestIdx = -1, bestSim = 0;
+      for (let i = 0; i < clusters.length; i++) {
+        const c = clusters[i];
+        let sim = jaccardSet(sig, c.sig);
+        if (c.norm.includes(norm) || norm.includes(c.norm)) sim = Math.max(sim, 0.9);
+        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+      }
+      if (bestSim >= threshold && bestIdx >= 0) {
+        const c = clusters[bestIdx];
+        c.count += 1; c.examples.push(raw);
+        if (!c.lastTs || new Date(item.ts) > new Date(c.lastTs)) c.lastTs = item.ts;
+      } else {
+        clusters.push({ repr: raw, norm, sig, count: 1, examples: [raw], lastTs: item.ts });
+      }
+    }
+    clusters.sort((a, b) => (b.count - a.count) || (new Date(b.lastTs) - new Date(a.lastTs)));
+    return clusters;
+  }
+
+  // ===== 其餘工具 =====
+  function escapeHTML(s) {
+    return (s ?? "").toString().replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"','&quot;').replaceAll("'","&#039;");
+  }
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs; // API 格式
+    return [];
+  }
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear(); const m = String(d.getUTCMonth()+1).padStart(2,"0"); const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,"0"); const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null; const a = new Date(aTs).getTime(); const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const startStr = getPickerDate("start");
+    const endStr = getPickerDate("end");
+    const start = startStr ? new Date(startStr + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endStr ? new Date(endStr + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked; const map = new Map();
+    for (const it of logs) { const key = toDateKey(it.ts, useUTC); if (!map.has(key)) map.set(key, []); map.get(key).push(it); }
+    for (const arr of map.values()) { arr.sort((a,b) => new Date(a.ts) - new Date(b.ts)); }
+    return [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+  }
+  function pairByOrder(dayLogs) {
+    const pairs = []; let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") { if (pendingUser) pairs.push({ user: pendingUser, assistant: null }); pendingUser = log; }
+      else if (log.role === "assistant") { if (pendingUser) { pairs.push({ user: pendingUser, assistant: log }); pendingUser = null; } else { pairs.push({ user: null, assistant: log }); } }
+      else { pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log }); }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  // ===== 渲染：排行榜 + 明細 =====
+  function renderAll() { renderLeaderboardOnly(); renderDetails(); }
+
+  async function renderLeaderboardOnly() {
+    const filtered = applyFilters(rawLogs);
+    const userLogs = filtered.filter(x => x.role === "user");
+
+    // 伺服器分群（若勾選）
+    if (useAIClusterEl.checked) {
+      try {
+        const threshold = (clusterLevelEl.value === "strict" ? 0.90 : (clusterLevelEl.value === "loose" ? 0.72 : 0.80));
+        const slim = filtered.map(x => ({ ts: x.ts, sessionId: x.sessionId, role: x.role, content: x.content }));
+        const resp = await fetch("/api/cluster", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ logs: slim, threshold, includeAnswer: includeAnswerEl.checked, method: methodEl.value, judgeBudget: 50 })
+        });
+        if (!resp.ok) throw new Error(`cluster API ${resp.status}`);
+        const data = await resp.json();
+        const clusters = (data.clusters || []).map(c => ({ repr: c.repr, count: c.count, examples: c.examples || [], lastTs: c.lastTs }));
+        clusterSource.textContent = "目前：AI 分群（伺服器）";
+        return renderLeaderboard(clusters);
+      } catch (e) {
+        console.warn("AI 分群失敗，改用本地分群：", e);
+      }
+    }
+
+    // 本地分群（fallback）
+    const clusters = clusterQuestions(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+    clusterSource.textContent = "目前：本地分群";
+    renderLeaderboard(clusters);
+  }
+
+  function renderLeaderboard(clusters) {
+    clustersCache = clusters; leaderTableBody.innerHTML = ""; const useUTC = useUTCEl.checked;
+    clusters.slice(0, 50).forEach((c, idx) => {
+      const tr = document.createElement("tr");
+      const examples = c.examples.slice(-3).reverse();
+      tr.innerHTML = `
+        <td class="mono">${idx + 1}</td>
+        <td class="sample">${escapeHTML(c.repr)}</td>
+        <td class="mono">${c.count}</td>
+        <td>${examples.map(e => `<span class="chip">${escapeHTML(e)}</span>`).join(" ")}</td>
+        <td class="mono">${fmtTime(c.lastTs, useUTC)}</td>
+      `;
+      leaderTableBody.appendChild(tr);
+    });
+    if (clusters.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="5" class="hint" style="text-align:center;">此區間沒有可統計的使用者問題。</td>`;
+      leaderTableBody.appendChild(tr);
+    }
+  }
+
+  function exportLeaderboardCSV() {
+    if (!clustersCache.length) return; const useUTC = useUTCEl.checked;
+    const rows = [["rank","count","repr","last_time","examples"]];
+    clustersCache.forEach((c, i) => {
+      const examples = c.examples.slice(-5).join(" | ");
+      rows.push([i+1, c.count, c.repr, fmtTime(c.lastTs, useUTC), examples]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `weider_digest_rank_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function buildCSV(pairs) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")]; const useUTC = useUTCEl.checked;
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+  function csvEscape(s) { const str = (s ?? "").toString().replaceAll('"','""'); return /[",\n]/.test(str) ? `"${str}"` : str; }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00"); const end = new Date((to || from) + "T00:00:00"); const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" }); if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json(); return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = getPickerDate("start"); const endVal = getPickerDate("end");
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+    try {
+      let arr = [];
+      if (!startVal && !endVal) {
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal; const to = endVal || startVal || from; const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`)));
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({ ts: x.ts, userId: x.userId ?? "", sessionId: x.sessionId ?? "", role: x.role, content: x.content ?? "", eventId: x.eventId ?? "" }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+      renderAll();
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  function renderDetails() {
+    const filtered = applyFilters(rawLogs); viewLogs = filtered;
+    const total = filtered.length; const users = filtered.filter(x => x.role === "user").length; const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered); daysRoot.innerHTML = "";
+    if (groups.length === 0) { daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`; return; }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section"); dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn sec" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user; const a = pair.assistant; const useUTC = useUTCEl.checked;
+        const uTime = u ? fmtTime(u.ts, useUTC) : ""; const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+        const idsText = [ u ? `U:${u.eventId}` : null, a ? `A:${a.eventId}` : null, u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null), u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null) ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => dayEl.classList.toggle('open'));
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs); const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `weider_digest_${dateKey}.csv`; a.click(); URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+
+    const firstDay = document.querySelector(".day"); if (firstDay) firstDay.classList.add("open");
+  }
+
+  // 首次載入：以今天為起迄
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!--
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+      --warn: #ca8a04;
+      --good: #16a34a;
+      --info: #0369a1;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+    /* 篩選列 */
+    .filters { display: grid; gap: 10px; grid-template-columns: 1fr; align-items: end; }
+    @media (min-width: 900px) {
+      .filters { grid-template-columns: auto auto 1fr auto auto; }
+    }
+    .picker-group { display: grid; gap: 6px; }
+    .picker-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .picker { display: flex; gap: 6px; align-items: center; }
+    .picker label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"], input[type="number"] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 10px; background: #fff; color: var(--text);
+      min-width: 86px;
+    }
+    input[type="range"] { vertical-align: middle; }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .btn.sec { background: #fff; color: var(--text); border-color: var(--border); }
+    .hint { font-size: 12px; color: var(--muted); }
+    .inline { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 排行榜 */
+    .leader { margin-top: 10px; }
+    .leader h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .leader .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .leader .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .leader .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:8px; }
+    .leader table { width:100%; border-collapse:collapse; font-size:14px; }
+    .leader thead th { position:sticky; top:0; background:#fafafa; z-index:1; border-bottom:1px solid var(--border); text-align:left; padding:10px; white-space:nowrap; }
+    .leader tbody td { border-bottom:1px solid var(--border); padding:10px; vertical-align:top; }
+    .leader .sample { color:#374151; }
+    .chip { display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:2px 6px; border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:12px; }
+    .note { font-size: 12px; color: var(--info); margin-bottom: 6px; }
+
+    /* 百分比上色 */
+    .pct { font-weight: 700; }
+    .pct.red { color: var(--danger); }     /* 前三名：紅色 */
+    .pct.yellow { color: var(--warn); }    /* 第4-6名：黃色 */
+    .pct.green { color: var(--good); }     /* 其他(≤10)：綠色 */
+
+    /* 明細（日別配對） */
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <div class="picker-group">
+          <div class="picker-row">
+            <div class="picker">
+              <label>起始日期</label>
+              <select id="startYear"></select>
+              <select id="startMonth"></select>
+              <select id="startDay"></select>
+            </div>
+          </div>
+          <div class="picker-row">
+            <div class="picker">
+              <label>結束日期</label>
+              <select id="endYear"></select>
+              <select id="endMonth"></select>
+              <select id="endDay"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-group">
+          <label>搜尋（內容、ID）</label>
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+          <div class="inline">
+            <input id="useUTC" type="checkbox" />
+            <span class="hint">使用 UTC 顯示時間</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:end; justify-content:flex-end;">
+          <button id="applyBtn" class="btn">套用</button>
+        </div>
+
+        <div style="display:flex; align-items:center;">
+          <span id="totalSummary" class="hint"></span>
+        </div>
+      </div>
+    </div>
+
+   
+    <div class="card leader">
+      <h3>熱門問題排行榜</h3>
+
+      <div id="leaderNote" class="note" style="display:none;"></div>
+
+      <div class="controls">
+        <div class="row">
+          <label>分群來源
+            <select id="clusterSource">
+              <option value="local" selected>本地</option>
+              <option value="ai">伺服器 AI</option>
+            </select>
+          </label>
+
+          <span id="aiOptions" class="row" style="display:none;">
+            <span class="inline">
+              <label>門檻
+                <input type="range" id="thresh" min="0.5" max="0.98" step="0.01" value="0.80">
+                <span id="threshVal" class="mono">0.80</span>
+              </label>
+            </span>
+            <span class="inline">
+              <label class="inline">
+                <input type="checkbox" id="includeAnswer">
+                包含 AI 回應
+              </label>
+            </span>
+            <label>方法
+              <select id="method">
+                <option value="embeddings">Embeddings</option>
+                <option value="judge" selected>Judge（臨界值用 4o-mini）</option>
+              </select>
+            </label>
+            <label>Judge 次數
+              <input id="judgeBudget" type="number" min="0" max="200" value="50" style="width:72px;">
+            </label>
+            <button id="exportRankBtn" class="btn sec">下載 CSV</button>
+          </span>
+
+         
+          <span id="localOptions" class="row">
+            <label>分組嚴格度
+              <select id="clusterLevel">
+                <option value="strict">嚴格（相似度 ≥ 0.90）</option>
+                <option value="medium" selected>中等（相似度 ≥ 0.80）</option>
+                <option value="loose">寬鬆（相似度 ≥ 0.72）</option>
+              </select>
+            </label>
+            <label>只統計長度 ≥
+              <select id="minLen">
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+              </select>
+              字
+            </label>
+            <button id="exportRankBtnLocal" class="btn sec">下載 CSV</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="leaderTable">
+          <thead>
+            <tr>
+              <th style="width:56px;">排名</th>
+              <th>代表問題</th>
+              <th>百分比</th>
+              <th>次數</th>
+              <th>近期例句</th>
+              <th>最近詢問時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+   
+    <div id="daysRoot" style="margin-top:12px;"></div>
+
+    <div class="footer">
+      資料來源：<code class="mono">/api/reports/daily?flat=1</code>；選定日期後逐日請求 <code class="mono">&day=YYYY-MM-DD</code> 合併顯示。<br/>
+      排行榜分群：本地（字元/詞 shingle + 同義詞正規化）或 伺服器 AI（text-embedding-3-small + 選配 gpt-4o-mini judge）。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 常數 / 元件 ===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const CLUSTER_API = "/api/cluster";
+
+  const daysRoot = document.getElementById("daysRoot");
+  const applyBtn = document.getElementById("applyBtn");
+  const searchInput = document.getElementById("searchInput");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  // Leaderboard controls
+  const clusterSourceEl = document.getElementById("clusterSource");
+  const aiOptions = document.getElementById("aiOptions");
+  const localOptions = document.getElementById("localOptions");
+  const clusterLevelEl = document.getElementById("clusterLevel");
+  const minLenEl = document.getElementById("minLen");
+  const exportRankBtnLocal = document.getElementById("exportRankBtnLocal");
+  const exportRankBtnAI = document.getElementById("exportRankBtn");
+  const leaderTableBody = document.querySelector("#leaderTable tbody");
+  const leaderNote = document.getElementById("leaderNote");
+
+  // AI options
+  const threshEl = document.getElementById("thresh");
+  const threshValEl = document.getElementById("threshVal");
+  const includeAnswerEl = document.getElementById("includeAnswer");
+  const methodEl = document.getElementById("method");
+  const judgeBudgetEl = document.getElementById("judgeBudget");
+
+  // 日期選擇器元素
+  const sY = document.getElementById("startYear");
+  const sM = document.getElementById("startMonth");
+  const sD = document.getElementById("startDay");
+  const eY = document.getElementById("endYear");
+  const eM = document.getElementById("endMonth");
+  const eD = document.getElementById("endDay");
+
+  let rawLogs = [];
+  let viewLogs = [];
+  let clustersCache = [];
+
+  // 事件
+  applyBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") renderAll(); });
+  useUTCEl.addEventListener("change", renderAll);
+
+  clusterSourceEl.addEventListener("change", () => {
+    const useAI = clusterSourceEl.value === "ai";
+    aiOptions.style.display = useAI ? "flex" : "none";
+    localOptions.style.display = useAI ? "none" : "flex";
+    renderLeaderboardOnly();
+  });
+
+  clusterLevelEl.addEventListener("change", renderLeaderboardOnly);
+  minLenEl.addEventListener("change", renderLeaderboardOnly);
+  exportRankBtnLocal.addEventListener("click", exportLeaderboardCSV);
+  exportRankBtnAI.addEventListener("click", exportLeaderboardCSV);
+
+  threshEl.addEventListener("input", () => {
+    threshValEl.textContent = Number(threshEl.value).toFixed(2);
+  });
+  [includeAnswerEl, methodEl, judgeBudgetEl].forEach(el => el.addEventListener("change", renderLeaderboardOnly));
+
+  // 複製（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  // ===== 日期選擇器 =====
+  const YEARS_BACK = 5;
+  initPickers();
+
+  function initPickers() {
+    const now = new Date();
+    const cy = now.getFullYear();
+    fillYear(sY, cy, YEARS_BACK);
+    fillYear(eY, cy, YEARS_BACK);
+    fillMonth(sM);
+    fillMonth(eM);
+    refreshDays("start");
+    refreshDays("end");
+    setPickerDate("start", toYMD(now));
+    setPickerDate("end", toYMD(now));
+
+    [sY, sM].forEach(el => el.addEventListener("change", () => refreshDays("start")));
+    [eY, eM].forEach(el => el.addEventListener("change", () => refreshDays("end")));
+  }
+  function fillYear(sel, currentYear, back) {
+    sel.innerHTML = "";
+    for (let y = currentYear; y >= currentYear - back; y--) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = `${y} 年`;
+      sel.appendChild(opt);
+    }
+  }
+  function fillMonth(sel) {
+    sel.innerHTML = "";
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `${m} 月`;
+      sel.appendChild(opt);
+    }
+  }
+  function refreshDays(prefix) {
+    const ySel = prefix === "start" ? sY : eY;
+    const mSel = prefix === "start" ? sM : eM;
+    const dSel = prefix === "start" ? sD : eD;
+    const year = parseInt(ySel.value, 10);
+    const month = parseInt(mSel.value, 10);
+    const max = daysInMonth(year, month);
+    const prev = dSel.value;
+    dSel.innerHTML = "";
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement("option");
+      opt.value = String(d).padStart(2, "0");
+      opt.textContent = `${d} 日`;
+      dSel.appendChild(opt);
+    }
+    if ([...dSel.options].some(o => o.value === prev)) dSel.value = prev;
+  }
+  function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+  function toYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function setPickerDate(prefix, ymd) {
+    const [y, m, d] = ymd.split("-");
+    if (prefix === "start") {
+      if (y) sY.value = y;
+      if (m) sM.value = m;
+      refreshDays("start");
+      if (d) sD.value = d;
+    } else {
+      if (y) eY.value = y;
+      if (m) eM.value = m;
+      refreshDays("end");
+      if (d) eD.value = d;
+    }
+  }
+  function getPickerDate(prefix) {
+    const y = (prefix === "start" ? sY : eY).value;
+    const m = (prefix === "start" ? sM : eM).value;
+    const d = (prefix === "start" ? sD : eD).value;
+    if (!y || !m || !d) return "";
+    return `${y}-${m}-${d}`;
+  }
+
+  // ===== 文本正規化與相似度（本地分群） =====
+  function toHalfWidth(str) {
+    return (str || "").replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+  }
+  const synonymRules = [
+    [/哪裏|哪裡|哪儿|哪兒|哪边|哪邊|何處|哪個地方|在哪裡|在那裡|在哪/g, "哪裡"],
+    [/怎麼|怎樣|怎麼樣/g, "如何"],
+    [/推薦|建議/g, "推薦"],
+    [/買得到|買的到|買得到嗎|買得到呢|購買到|哪裡買|在哪買|哪裏買|哪裡購買|哪裡買到|哪裡買得到|哪裡可以買|哪裡能買|哪裡買賣/g, "購買"],
+    [/售價|價錢|價位|費用/g, "價格"],
+    [/威德\s*益生菌|weider\s*益生菌|weider\s*probiotic(s)?|威德probiotic/gi, "威德益生菌"],
+  ];
+  function normalizeForGrouping(s) {
+    let t = toHalfWidth((s || "").trim().toLowerCase());
+    t = t.replace(/[~`!@#$%^&*()\-_=+\[\]{}\\|;:'",.<>/?，。？！；：、（）【】《》「」『』—…·]/g, " ");
+    synonymRules.forEach(([re, rep]) => { t = t.replace(re, rep); });
+    t = t.replace(/\d+/g, "0");
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  }
+  function charBigrams(s) {
+    const arr = [];
+    const t = (s || "").replace(/\s+/g, "");
+    for (let i=0; i < Math.max(0, t.length - 1); i++) arr.push(t.slice(i, i+2));
+    return arr;
+  }
+  function jaccard(a, b) {
+    if (!a.size && !b.size) return 1;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter++;
+    const uni = a.size + b.size - inter;
+    return uni === 0 ? 0 : inter / uni;
+  }
+  function buildSignature(norm) {
+    const tokens = norm ? norm.split(/\s+/) : [];
+    const shingles = new Set([...charBigrams(norm || ""), ...tokens]);
+    return shingles;
+  }
+  function levelToThreshold(level) { if (level === "strict") return 0.90; if (level === "loose") return 0.72; return 0.80; }
+
+  function clusterQuestionsLocal(userLogs, level, minLen) {
+    const threshold = levelToThreshold(level);
+    const clusters = [];
+    for (const item of userLogs) {
+      const raw = (item.content || "").trim();
+      const norm = normalizeForGrouping(raw);
+      if (!norm || norm.length < minLen) continue;
+      const sig = buildSignature(norm);
+
+      let bestIdx = -1, bestSim = 0;
+      for (let i = 0; i < clusters.length; i++) {
+        const c = clusters[i];
+        let sim = jaccard(sig, c.sig);
+        if (c.norm.includes(norm) || norm.includes(c.norm)) sim = Math.max(sim, 0.9);
+        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+      }
+      if (bestSim >= threshold && bestIdx >= 0) {
+        const c = clusters[bestIdx];
+        c.count += 1;
+        c.examples.push(raw);
+        if (!c.lastTs || new Date(item.ts) > new Date(c.lastTs)) c.lastTs = item.ts;
+      } else {
+        clusters.push({ repr: raw, norm, sig, count: 1, examples: [raw], lastTs: item.ts });
+      }
+    }
+    clusters.sort((a, b) => (b.count - a.count) || (new Date(b.lastTs) - new Date(a.lastTs)));
+    return clusters;
+  }
+
+  // ===== 伺服器 AI 分群 =====
+  async function clusterQuestionsAI(filteredLogs) {
+    // 只把必要欄位送給 /api/cluster；server 端會先配對 user→assistant 再做 embeddings/判斷
+    const payload = {
+      logs: filteredLogs.map(x => ({
+        ts: x.ts,
+        sessionId: x.sessionId || "",
+        userId: x.userId || "",
+        role: x.role,
+        content: String(x.content ?? ""),
+        eventId: x.eventId || ""
+      })),
+      threshold: Number(threshEl.value),
+      includeAnswer: !!includeAnswerEl.checked,
+      method: methodEl.value,                  // "embeddings" | "judge"
+      judgeBudget: parseInt(judgeBudgetEl.value || "50", 10)
+    };
+
+    const res = await fetch(CLUSTER_API, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "same-origin"
+    });
+
+    if (!res.ok) {
+      const msg = `AI 分群 API 錯誤：HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const clusters = (data && data.clusters) ? data.clusters : [];
+    // 正規化成前端共用格式
+    return clusters.map(c => ({
+      repr: c.repr,
+      count: c.count,
+      examples: c.examples || [],
+      lastTs: c.lastTs
+    }));
+  }
+
+  // ===== 渲染：排行榜 + 明細 =====
+  async function renderLeaderboardOnly() {
+    leaderNote.style.display = "none";
+    leaderNote.textContent = "";
+    leaderTableBody.innerHTML = `<tr><td colspan="6" class="hint" style="text-align:center;">計算中…</td></tr>`;
+
+    const filtered = applyFilters(rawLogs);
+    const userLogs = filtered.filter(x => x.role === "user");
+    const totalUserCount = userLogs.length || 1; // 百分比分母
+    const useUTC = useUTCEl.checked;
+    const useAI = clusterSourceEl.value === "ai";
+
+    try {
+      let clusters = [];
+      if (useAI) {
+        clusters = await clusterQuestionsAI(filtered); // 用完整 filtered（含助理）給 server pairing
+      } else {
+        clusters = clusterQuestionsLocal(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+      }
+      renderLeaderboard(clusters, totalUserCount);
+      if (useAI) {
+        leaderNote.style.display = "block";
+        leaderNote.textContent = `已使用伺服器 AI 分群（門檻 ${Number(threshEl.value).toFixed(2)}，方法：${methodEl.value}${includeAnswerEl.checked ? "，含回答語意" : ""}）`;
+      }
+    } catch (err) {
+      // 失敗就退回本地分群
+      const fallback = clusterQuestionsLocal(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+      renderLeaderboard(fallback, totalUserCount);
+      leaderNote.style.display = "block";
+      leaderNote.textContent = `AI 分群失敗，已切回本地分群。${String(err)}`;
+      clusterSourceEl.value = "local";
+      aiOptions.style.display = "none";
+      localOptions.style.display = "flex";
+    }
+  }
+
+  function renderLeaderboard(clusters, totalUserCount) {
+    clustersCache = clusters;
+    leaderTableBody.innerHTML = "";
+    const denom = Math.max(1, totalUserCount);
+
+    clusters.slice(0, 10).forEach((c, idx) => {
+      const tr = document.createElement("tr");
+      const examples = c.examples.slice(-3).reverse();
+      const pctNum = (c.count / denom) * 100;
+      const pctText = pctNum.toFixed(1) + "%";
+      let pctClass = "green";
+      if (idx < 3) pctClass = "red";
+      else if (idx < 6) pctClass = "yellow";
+      tr.innerHTML = `
+        <td class="mono">${idx + 1}</td>
+        <td class="sample">${escapeHTML(c.repr)}</td>
+        <td class="mono pct ${pctClass}">${pctText}</td>
+        <td class="mono">${c.count}</td>
+        <td>${examples.map(e => `<span class="chip">${escapeHTML(e)}</span>`).join(" ")}</td>
+        <td class="mono">${fmtTime(c.lastTs, useUTCEl.checked)}</td>
+      `;
+      leaderTableBody.appendChild(tr);
+    });
+
+    if (clusters.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="6" class="hint" style="text-align:center;">此區間沒有可統計的使用者問題。</td>`;
+      leaderTableBody.appendChild(tr);
+    }
+  }
+
+  function exportLeaderboardCSV() {
+    if (!clustersCache.length) return;
+    const useUTC = useUTCEl.checked;
+    const filtered = applyFilters(rawLogs);
+    const totalUserCount = filtered.filter(x => x.role === "user").length || 1;
+
+    const rows = [["rank","percentage","count","repr","last_time","examples"]];
+    clustersCache.slice(0,10).forEach((c, i) => {
+      const pct = ((c.count / totalUserCount) * 100).toFixed(1) + "%";
+      const examples = (c.examples || []).slice(-5).join(" | ");
+      rows.push([i+1, pct, c.count, c.repr, fmtTime(c.lastTs, useUTC), examples]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `weider_digest_rank_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function renderDetails() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn sec" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+
+    const firstDay = document.querySelector(".day");
+    if (firstDay) firstDay.classList.add("open");
+  }
+
+  function buildCSV(pairs) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00");
+    const end = new Date((to || from) + "T00:00:00");
+    const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = getPickerDate("start");
+    const endVal = getPickerDate("end");
+
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+
+    try {
+      let arr = [];
+
+      if (!startVal && !endVal) {
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal;
+        const to = endVal || startVal || from;
+        const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(
+          days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`))
+        );
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+
+      await renderAll();
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  async function renderAll() {
+    await renderLeaderboardOnly();
+    renderDetails();
+  }
+
+  // 通用工具
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs;
+    return [];
+  }
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const startStr = getPickerDate("start");
+    const endStr = getPickerDate("end");
+    const start = startStr ? new Date(startStr + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endStr ? new Date(endStr + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    return [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+  }
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  // 首次載入
+  await loadAndRender();
+})();
+</script>
+</body>
+</html> -->
+
+<!-- 0825 logs-daily-app-transcript-report_html -->
+
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>每日問答報表｜Weider Digest</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-weak: #dbeafe;
+      --danger: #ef4444;
+      --ok: #16a34a;
+      --warn: #ca8a04;
+      --good: #16a34a;
+      --info: #0369a1;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+    /* 篩選列 */
+    .filters { display: grid; gap: 10px; grid-template-columns: 1fr; align-items: end; }
+    @media (min-width: 900px) {
+      .filters { grid-template-columns: auto auto 1fr auto auto; }
+    }
+    .picker-group { display: grid; gap: 6px; }
+    .picker-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .picker { display: flex; gap: 6px; align-items: center; }
+    .picker label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"], input[type="number"] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 10px; background: #fff; color: var(--text);
+      min-width: 86px;
+    }
+    input[type="range"] { vertical-align: middle; }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    }
+    .btn.sec { background: #fff; color: var(--text); border-color: var(--border); }
+    .hint { font-size: 12px; color: var(--muted); }
+    .inline { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 排行榜 */
+    .leader { margin-top: 10px; }
+    .leader h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .leader .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .leader .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .leader .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:8px; }
+    .leader table { width:100%; border-collapse:collapse; font-size:14px; }
+    .leader thead th { position:sticky; top:0; background:#fafafa; z-index:1; border-bottom:1px solid var(--border); text-align:left; padding:10px; white-space:nowrap; }
+    .leader tbody td { border-bottom:1px solid var(--border); padding:10px; vertical-align:top; }
+    .leader .sample { color:#374151; }
+    .chip { display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:2px 6px; border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:12px; }
+    .note { font-size: 12px; color: var(--info); margin-bottom: 6px; }
+
+    /* 百分比上色 */
+    .pct { font-weight: 700; }
+    .pct.red { color: var(--danger); }
+    .pct.yellow { color: var(--warn); }
+    .pct.green { color: var(--good); }
+
+    /* 明細（日別配對） */
+    .day { margin-top: 14px; }
+    .day .day-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; }
+    .day .day-header h3 { margin: 0; font-size: 16px; }
+    .day .day-header .meta { color: var(--muted); font-size: 12px; }
+    .day .day-body { padding: 8px 12px 12px; display: none; }
+    .day.open .day-body { display: block; }
+
+    .pill { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #fff; }
+    .pill.ok { border-color: #bbf7d0; background: #ecfdf5; color: var(--ok); }
+    .pill.warn { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { position: sticky; top: 0; background: #fafafa; z-index: 1; border-bottom: 1px solid var(--border); text-align: left; padding: 10px; white-space: nowrap; }
+    tbody td { border-bottom: 1px solid var(--border); padding: 10px; vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .content { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-width: 560px; }
+    .role-badge { display: inline-block; font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .role-user { background: #f1f5f9; }
+    .role-assistant { background: var(--accent-weak); }
+
+    .copy-btn { font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">每日問答報表</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <div class="filters">
+        <div class="picker-group">
+          <div class="picker-row">
+            <div class="picker">
+              <label>起始日期</label>
+              <select id="startYear"></select>
+              <select id="startMonth"></select>
+              <select id="startDay"></select>
+            </div>
+          </div>
+          <div class="picker-row">
+            <div class="picker">
+              <label>結束日期</label>
+              <select id="endYear"></select>
+              <select id="endMonth"></select>
+              <select id="endDay"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker-group">
+          <label>搜尋（內容、ID）</label>
+          <input id="searchInput" type="text" placeholder="輸入關鍵字…" />
+          <div class="inline">
+            <input id="useUTC" type="checkbox" />
+            <span class="hint">使用 UTC 顯示時間</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:end; justify-content:flex-end;">
+          <button id="applyBtn" class="btn">套用</button>
+        </div>
+
+        <div style="display:flex; align-items:center;">
+          <span id="totalSummary" class="hint"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔥 熱門問題排行榜（支援 本地/伺服器AI 分群） -->
+    <div class="card leader">
+      <h3>熱門問題排行榜</h3>
+
+      <div id="leaderNote" class="note" style="display:none;"></div>
+
+      <div class="controls">
+        <div class="row">
+          <label>分群來源
+            <select id="clusterSource">
+              <option value="local" selected>本地</option>
+              <option value="ai">伺服器 AI</option>
+            </select>
+          </label>
+
+          <span id="aiOptions" class="row" style="display:none;">
+            <span class="inline">
+              <label>門檻
+                <input type="range" id="thresh" min="0.5" max="0.98" step="0.01" value="0.80">
+                <span id="threshVal" class="mono">0.80</span>
+              </label>
+            </span>
+            <span class="inline">
+              <label class="inline">
+                <input type="checkbox" id="includeAnswer">
+                包含 AI 回應
+              </label>
+            </span>
+            <label>方法
+              <select id="method">
+                <option value="embeddings">Embeddings</option>
+                <option value="judge" selected>Judge（臨界值用 4o-mini）</option>
+              </select>
+            </label>
+            <label>Judge 次數
+              <input id="judgeBudget" type="number" min="0" max="200" value="50" style="width:72px;">
+            </label>
+            <button id="exportRankBtn" class="btn sec">下載 CSV</button>
+          </span>
+
+          <!-- 本地分群微調 -->
+          <span id="localOptions" class="row">
+            <label>分組嚴格度
+              <select id="clusterLevel">
+                <option value="strict">嚴格（相似度 ≥ 0.90）</option>
+                <option value="medium" selected>中等（相似度 ≥ 0.80）</option>
+                <option value="loose">寬鬆（相似度 ≥ 0.72）</option>
+              </select>
+            </label>
+            <label>只統計長度 ≥
+              <select id="minLen">
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+              </select>
+              字
+            </label>
+            <button id="exportRankBtnLocal" class="btn sec">下載 CSV</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="leaderTable">
+          <thead>
+            <tr>
+              <th style="width:56px;">排名</th>
+              <th>代表問題</th>
+              <th>百分比</th>
+              <th>次數</th>
+              <th>近期例句</th>
+              <th>最近詢問時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 明細（日別配對） -->
+    <div id="daysRoot" style="margin-top:12px;"></div>
+
+    <div class="footer">
+      資料來源：<code class="mono">/api/reports/daily?flat=1</code>；選定日期後逐日請求 <code class="mono">&day=YYYY-MM-DD</code> 合併顯示。<br/>
+      排行榜分群：本地（字元/詞 shingle + 同義詞正規化）或 伺服器 AI（text-embedding-3-small + 選配 gpt-4o-mini judge）。
+    </div>
+  </div>
+
+<script>
+(async function() {
+  // === 常數 / 元件 ===
+  const API_BASE = "/api/reports/daily?flat=1";
+  const CLUSTER_API = "/api/cluster";
+
+  const daysRoot = document.getElementById("daysRoot");
+  const applyBtn = document.getElementById("applyBtn");
+  const searchInput = document.getElementById("searchInput");
+  const useUTCEl = document.getElementById("useUTC");
+  const totalSummary = document.getElementById("totalSummary");
+
+  // Leaderboard controls
+  const clusterSourceEl = document.getElementById("clusterSource");
+  const aiOptions = document.getElementById("aiOptions");
+  const localOptions = document.getElementById("localOptions");
+  const clusterLevelEl = document.getElementById("clusterLevel");
+  const minLenEl = document.getElementById("minLen");
+  const exportRankBtnLocal = document.getElementById("exportRankBtnLocal");
+  const exportRankBtnAI = document.getElementById("exportRankBtn");
+  const leaderTableBody = document.querySelector("#leaderTable tbody");
+  const leaderNote = document.getElementById("leaderNote");
+
+  // AI options
+  const threshEl = document.getElementById("thresh");
+  const threshValEl = document.getElementById("threshVal");
+  const includeAnswerEl = document.getElementById("includeAnswer");
+  const methodEl = document.getElementById("method");
+  const judgeBudgetEl = document.getElementById("judgeBudget");
+
+  // 日期選擇器元素
+  const sY = document.getElementById("startYear");
+  const sM = document.getElementById("startMonth");
+  const sD = document.getElementById("startDay");
+  const eY = document.getElementById("endYear");
+  const eM = document.getElementById("endMonth");
+  const eD = document.getElementById("endDay");
+
+  let rawLogs = [];
+  let viewLogs = [];
+  let clustersCache = [];
+
+  // 事件
+  applyBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") renderAll(); });
+  useUTCEl.addEventListener("change", renderAll);
+
+  clusterSourceEl.addEventListener("change", () => {
+    const useAI = clusterSourceEl.value === "ai";
+    aiOptions.style.display = useAI ? "flex" : "none";
+    localOptions.style.display = useAI ? "none" : "flex";
+    renderLeaderboardOnly();
+  });
+
+  clusterLevelEl.addEventListener("change", renderLeaderboardOnly);
+  minLenEl.addEventListener("change", renderLeaderboardOnly);
+  exportRankBtnLocal.addEventListener("click", exportLeaderboardCSV);
+  exportRankBtnAI.addEventListener("click", exportLeaderboardCSV);
+
+  threshEl.addEventListener("input", () => {
+    threshValEl.textContent = Number(threshEl.value).toFixed(2);
+  });
+  [includeAnswerEl, methodEl, judgeBudgetEl].forEach(el => el.addEventListener("change", renderLeaderboardOnly));
+
+  // 複製（事件委派）
+  daysRoot.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const text = btn.getAttribute("data-copy") || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "已複製";
+      setTimeout(() => (btn.textContent = "複製"), 1200);
+    } catch {
+      alert("複製失敗");
+    }
+  });
+
+  // ===== 日期選擇器 =====
+  const YEARS_BACK = 5;
+  initPickers();
+
+  function initPickers() {
+    const now = new Date();
+    const cy = now.getFullYear();
+    fillYear(sY, cy, YEARS_BACK);
+    fillYear(eY, cy, YEARS_BACK);
+    fillMonth(sM);
+    fillMonth(eM);
+    refreshDays("start");
+    refreshDays("end");
+    setPickerDate("start", toYMD(now));
+    setPickerDate("end", toYMD(now));
+
+    [sY, sM].forEach(el => el.addEventListener("change", () => refreshDays("start")));
+    [eY, eM].forEach(el => el.addEventListener("change", () => refreshDays("end")));
+  }
+  function fillYear(sel, currentYear, back) {
+    sel.innerHTML = "";
+    for (let y = currentYear; y >= currentYear - back; y--) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = `${y} 年`;
+      sel.appendChild(opt);
+    }
+  }
+  function fillMonth(sel) {
+    sel.innerHTML = "";
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `${m} 月`;
+      sel.appendChild(opt);
+    }
+  }
+  function refreshDays(prefix) {
+    const ySel = prefix === "start" ? sY : eY;
+    const mSel = prefix === "start" ? sM : eM;
+    const dSel = prefix === "start" ? sD : eD;
+    const year = parseInt(ySel.value, 10);
+    const month = parseInt(mSel.value, 10);
+    const max = daysInMonth(year, month);
+    const prev = dSel.value;
+    dSel.innerHTML = "";
+    for (let d = 1; d <= max; d++) {
+      const opt = document.createElement("option");
+      opt.value = String(d).padStart(2, "0");
+      opt.textContent = `${d} 日`;
+      dSel.appendChild(opt);
+    }
+    if ([...dSel.options].some(o => o.value === prev)) dSel.value = prev;
+  }
+  function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+  function toYMD(d) {
+    const y = d.getFullYear();
+       const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function setPickerDate(prefix, ymd) {
+    const [y, m, d] = ymd.split("-");
+    if (prefix === "start") {
+      if (y) sY.value = y;
+      if (m) sM.value = m;
+      refreshDays("start");
+      if (d) sD.value = d;
+    } else {
+      if (y) eY.value = y;
+      if (m) eM.value = m;
+      refreshDays("end");
+      if (d) eD.value = d;
+    }
+  }
+  function getPickerDate(prefix) {
+    const y = (prefix === "start" ? sY : eY).value;
+    const m = (prefix === "start" ? sM : eM).value;
+    const d = (prefix === "start" ? sD : eD).value;
+    if (!y || !m || !d) return "";
+    return `${y}-${m}-${d}`;
+  }
+
+  // ===== 文本正規化與相似度（本地分群） =====
+  function toHalfWidth(str) {
+    return (str || "").replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+  }
+  const synonymRules = [
+    [/哪裏|哪裡|哪儿|哪兒|哪边|哪邊|何處|哪個地方|在哪裡|在那裡|在哪/g, "哪裡"],
+    [/怎麼|怎樣|怎麼樣/g, "如何"],
+    [/推薦|建議/g, "推薦"],
+    [/買得到|買的到|買得到嗎|買得到呢|購買到|哪裡買|在哪買|哪裏買|哪裡購買|哪裡買到|哪裡買得到|哪裡可以買|哪裡能買|哪裡買賣/g, "購買"],
+    [/售價|價錢|價位|費用/g, "價格"],
+    [/威德\s*益生菌|weider\s*益生菌|weider\s*probiotic(s)?|威德probiotic/gi, "威德益生菌"],
+  ];
+  function normalizeForGrouping(s) {
+    let t = toHalfWidth((s || "").trim().toLowerCase());
+    t = t.replace(/[~`!@#$%^&*()\-_=+\[\]{}\\|;:'",.<>/?，。？！；：、（）【】《》「」『』—…·]/g, " ");
+    synonymRules.forEach(([re, rep]) => { t = t.replace(re, rep); });
+    t = t.replace(/\d+/g, "0");
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  }
+  function charBigrams(s) {
+    const arr = [];
+    const t = (s || "").replace(/\s+/g, "");
+    for (let i=0; i < Math.max(0, t.length - 1); i++) arr.push(t.slice(i, i+2));
+    return arr;
+  }
+  function jaccard(a, b) {
+    if (!a.size && !b.size) return 1;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter++;
+    const uni = a.size + b.size - inter;
+    return uni === 0 ? 0 : inter / uni;
+  }
+  function buildSignature(norm) {
+    const tokens = norm ? norm.split(/\s+/) : [];
+    const shingles = new Set([...charBigrams(norm || ""), ...tokens]);
+    return shingles;
+  }
+  function levelToThreshold(level) { if (level === "strict") return 0.90; if (level === "loose") return 0.72; return 0.80; }
+
+  function clusterQuestionsLocal(userLogs, level, minLen) {
+    const threshold = levelToThreshold(level);
+    const clusters = [];
+    for (const item of userLogs) {
+      const raw = (item.content || "").trim();
+      const norm = normalizeForGrouping(raw);
+      if (!norm || norm.length < minLen) continue;
+      const sig = buildSignature(norm);
+
+      let bestIdx = -1, bestSim = 0;
+      for (let i = 0; i < clusters.length; i++) {
+        const c = clusters[i];
+        let sim = jaccard(sig, c.sig);
+        if (c.norm.includes(norm) || norm.includes(c.norm)) sim = Math.max(sim, 0.9);
+        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+      }
+      if (bestSim >= threshold && bestIdx >= 0) {
+        const c = clusters[bestIdx];
+        c.count += 1;
+        c.examples.push(raw);
+        if (!c.lastTs || new Date(item.ts) > new Date(c.lastTs)) c.lastTs = item.ts;
+      } else {
+        clusters.push({ repr: raw, norm, sig, count: 1, examples: [raw], lastTs: item.ts });
+      }
+    }
+    clusters.sort((a, b) => (b.count - a.count) || (new Date(b.lastTs) - new Date(a.lastTs)));
+    return clusters;
+  }
+
+  // ===== 伺服器 AI 分群 =====
+  async function clusterQuestionsAI(filteredLogs) {
+    const payload = {
+      logs: filteredLogs.map(x => ({
+        ts: x.ts,
+        sessionId: x.sessionId || "",
+        userId: x.userId || "",
+        role: x.role,
+        content: String(x.content ?? ""),
+        eventId: x.eventId || ""
+      })),
+      threshold: Number(threshEl.value),
+      includeAnswer: !!includeAnswerEl.checked,
+      method: methodEl.value,
+      judgeBudget: parseInt(judgeBudgetEl.value || "50", 10)
+    };
+
+    const res = await fetch(CLUSTER_API, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "same-origin"
+    });
+
+    if (!res.ok) {
+      const msg = `AI 分群 API 錯誤：HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const clusters = (data && data.clusters) ? data.clusters : [];
+    return clusters.map(c => ({
+      repr: c.repr,
+      count: c.count,
+      examples: c.examples || [],
+      lastTs: c.lastTs
+    }));
+  }
+
+  // ====== 滿意度整合 ======
+  // 建 rating map：優先採用 assistant 物件裡的 rating / feedbackTargetId，再補 parse [RATING] 行
+  function buildRatingMap(logs) {
+    const map = new Map(); // key: assistant eventId 或 targetId -> value: rating
+
+    // 先掃一次：收集直接掛在 assistant 的 rating
+    for (const it of logs) {
+      if (String(it.role || "").toLowerCase() !== "assistant") continue;
+      if (typeof it.rating === "number") {
+        if (it.eventId) map.set(it.eventId, it.rating);
+        if (it.feedbackTargetId) map.set(it.feedbackTargetId, it.rating);
+      }
+    }
+
+    // 再掃 feedback 行做補充（相容 detail=1 或非合併來源）
+    const re = /\[RATING\]\s*target=([^\s]+)\s*value=(\d+)/i;
+    for (const it of logs) {
+      const role = String(it.role || "").toLowerCase();
+      if (role !== "feedback" && !(role === "system" && /^\[RATING\]/.test(String(it.content || "")))) continue;
+      const m = re.exec(String(it.content || ""));
+      if (!m) continue;
+      const target = m[1];
+      const val = parseInt(m[2], 10);
+      map.set(target, val); // 後寫覆蓋先寫
+    }
+
+    return map;
+  }
+  function getRatingForAssistant(a, ratingMap) {
+    if (!a) return null;
+    if (typeof a.rating === "number") return a.rating;                    // 直接使用合併後欄位
+    if (a.eventId && ratingMap.has(a.eventId)) return ratingMap.get(a.eventId);
+    if (a.feedbackTargetId && ratingMap.has(a.feedbackTargetId)) return ratingMap.get(a.feedbackTargetId);
+    return null;
+  }
+  function ratingEmoji(val) {
+    if (val == null || isNaN(val)) return "";
+    if (val >= 100) return "😍";
+    if (val >= 70)  return "😊";
+    if (val >= 50)  return "😐";
+    if (val >= 20)  return "😕";
+    return "😡";
+  }
+
+  // ===== 渲染：排行榜 + 明細 =====
+  async function renderLeaderboardOnly() {
+    leaderNote.style.display = "none";
+    leaderNote.textContent = "";
+    leaderTableBody.innerHTML = `<tr><td colspan="6" class="hint" style="text-align:center;">計算中…</td></tr>`;
+
+    const filtered = applyFilters(rawLogs);
+    const userLogs = filtered.filter(x => x.role === "user");
+    const totalUserCount = userLogs.length || 1;
+    const useAI = clusterSourceEl.value === "ai";
+
+    try {
+      let clusters = [];
+      if (useAI) {
+        clusters = await clusterQuestionsAI(filtered);
+      } else {
+        clusters = clusterQuestionsLocal(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+      }
+      renderLeaderboard(clusters, totalUserCount);
+      if (useAI) {
+        leaderNote.style.display = "block";
+        leaderNote.textContent = `已使用伺服器 AI 分群（門檻 ${Number(threshEl.value).toFixed(2)}，方法：${methodEl.value}${includeAnswerEl.checked ? "，含回答語意" : ""}）`;
+      }
+    } catch (err) {
+      const fallback = clusterQuestionsLocal(userLogs, clusterLevelEl.value, parseInt(minLenEl.value, 10));
+      renderLeaderboard(fallback, totalUserCount);
+      leaderNote.style.display = "block";
+      leaderNote.textContent = `AI 分群失敗，已切回本地分群。${String(err)}`;
+      clusterSourceEl.value = "local";
+      aiOptions.style.display = "none";
+      localOptions.style.display = "flex";
+    }
+  }
+
+  function renderLeaderboard(clusters, totalUserCount) {
+    clustersCache = clusters;
+    leaderTableBody.innerHTML = "";
+    const denom = Math.max(1, totalUserCount);
+
+    clusters.slice(0, 10).forEach((c, idx) => {
+      const tr = document.createElement("tr");
+      const examples = c.examples.slice(-3).reverse();
+      const pctNum = (c.count / denom) * 100;
+      const pctText = pctNum.toFixed(1) + "%";
+      let pctClass = "green";
+      if (idx < 3) pctClass = "red";
+      else if (idx < 6) pctClass = "yellow";
+      tr.innerHTML = `
+        <td class="mono">${idx + 1}</td>
+        <td class="sample">${escapeHTML(c.repr)}</td>
+        <td class="mono pct ${pctClass}">${pctText}</td>
+        <td class="mono">${c.count}</td>
+        <td>${examples.map(e => `<span class="chip">${escapeHTML(e)}</span>`).join(" ")}</td>
+        <td class="mono">${fmtTime(c.lastTs, useUTCEl.checked)}</td>
+      `;
+      leaderTableBody.appendChild(tr);
+    });
+
+    if (clusters.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="6" class="hint" style="text-align:center;">此區間沒有可統計的使用者問題。</td>`;
+      leaderTableBody.appendChild(tr);
+    }
+  }
+
+  function exportLeaderboardCSV() {
+    if (!clustersCache.length) return;
+    const useUTC = useUTCEl.checked;
+    const filtered = applyFilters(rawLogs);
+    const totalUserCount = filtered.filter(x => x.role === "user").length || 1;
+
+    const rows = [["rank","percentage","count","repr","last_time","examples"]];
+    clustersCache.slice(0,10).forEach((c, i) => {
+      const pct = ((c.count / totalUserCount) * 100).toFixed(1) + "%";
+      const examples = (c.examples || []).slice(-5).join(" | ");
+      rows.push([i+1, pct, c.count, c.repr, fmtTime(c.lastTs, useUTC), examples]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `weider_digest_rank_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function renderDetails() {
+    const filtered = applyFilters(rawLogs);
+    viewLogs = filtered;
+
+    const total = filtered.length;
+    const users = filtered.filter(x => x.role === "user").length;
+    const assistants = filtered.filter(x => x.role === "assistant").length;
+    totalSummary.textContent = `目前顯示：共 ${total} 筆（user: ${users}, assistant: ${assistants}）`;
+
+    // 解析滿意度（從篩選後集合中建立）
+    const ratingMap = buildRatingMap(filtered);
+
+    const groups = groupByDate(filtered);
+    daysRoot.innerHTML = "";
+    if (groups.length === 0) {
+      daysRoot.innerHTML = `<div class="card empty">尚無資料或過濾結果為空。</div>`;
+      return;
+    }
+
+    for (const [dateKey, items] of groups) {
+      const pairs = pairByOrder(items);
+      const pairedCount = pairs.filter(p => p.user && p.assistant).length;
+      const orphanUsers = pairs.filter(p => p.user && !p.assistant).length;
+      const orphanAssistants = pairs.filter(p => !p.user && p.assistant).length;
+
+      const dayEl = document.createElement("section");
+      dayEl.className = "card day";
+      dayEl.innerHTML = `
+        <div class="day-header" data-toggle>
+          <h3>${dateKey}</h3>
+          <div class="meta">
+            <span class="pill ok">配對 ${pairedCount}</span>
+            <span class="pill warn">孤兒 user ${orphanUsers}</span>
+            <span class="pill warn">孤兒 assistant ${orphanAssistants}</span>
+            <span class="pill">總筆數 ${items.length}</span>
+            <span class="tools">
+              <button class="btn sec" data-export="${dateKey}">匯出 CSV</button>
+            </span>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56px;">#</th>
+                  <th>用戶時間</th>
+                  <th>用戶內容</th>
+                  <th>助理時間</th>
+                  <th>助理內容</th>
+                  <th>滿意度</th>
+                  <th style="white-space:nowrap;">回應延遲（秒）</th>
+                  <th>IDs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      const tbody = dayEl.querySelector("tbody");
+
+      pairs.forEach((pair, idx) => {
+        const u = pair.user;
+        const a = pair.assistant;
+        const useUTC = useUTCEl.checked;
+
+        const uTime = u ? fmtTime(u.ts, useUTC) : "";
+        const aTime = a ? fmtTime(a.ts, useUTC) : "";
+        const latency = (u && a) ? diffSeconds(u.ts, a.ts) : null;
+
+        const idsText = [
+          u ? `U:${u.eventId}` : null,
+          a ? `A:${a.eventId}` : null,
+          u && u.sessionId ? `SID:${u.sessionId}` : (a && a.sessionId ? `SID:${a.sessionId}` : null),
+          u && u.userId ? `UID:${u.userId}` : (a && a.userId ? `UID:${a.userId}` : null),
+        ].filter(Boolean).join(" | ");
+
+        const ratingVal = getRatingForAssistant(a, ratingMap);
+        const ratingCell = ratingVal == null
+          ? "—"
+          : `<span title="滿意度">${ratingEmoji(ratingVal)} <span class="mono">(${ratingVal})</span></span>`;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${idx + 1}</td>
+          <td class="mono">${escapeHTML(uTime)}</td>
+          <td>
+            ${u ? `<span class="role-badge role-user">user</span>` : ""}
+            <div class="content">${escapeHTML(u ? u.content : "—")}</div>
+            ${u ? `<button class="copy-btn" data-copy="${escapeHTML(u.content)}">複製</button>` : ""}
+          </td>
+          <td class="mono">${escapeHTML(aTime)}</td>
+          <td>
+            ${a ? `<span class="role-badge role-assistant">assistant</span>` : ""}
+            <div class="content">${escapeHTML(a ? a.content : "—")}</div>
+            ${a ? `<button class="copy-btn" data-copy="${escapeHTML(a.content)}">複製</button>` : ""}
+          </td>
+          <td>${ratingCell}</td>
+          <td>${latency == null ? "—" : `<span class="mono">${latency}</span>`}</td>
+          <td>
+            <div class="mono" style="white-space:pre-wrap;word-break:break-word;">${escapeHTML(idsText || "—")}</div>
+            ${idsText ? `<button class="copy-btn" data-copy="${escapeHTML(idsText)}">複製 IDs</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      dayEl.querySelector('[data-toggle]').addEventListener('click', () => {
+        dayEl.classList.toggle('open');
+      });
+
+      dayEl.querySelector('[data-export]').addEventListener('click', () => {
+        const csv = buildCSV(pairs, ratingMap);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `weider_digest_${dateKey}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      daysRoot.appendChild(dayEl);
+    }
+
+    const firstDay = document.querySelector(".day");
+    if (firstDay) firstDay.classList.add("open");
+  }
+
+  function buildCSV(pairs, ratingMap) {
+    const headers = ["index","user_time","user_content","assistant_time","assistant_content","rating","latency_sec","user_eventId","assistant_eventId","userId","sessionId"];
+    const lines = [headers.join(",")];
+    const useUTC = useUTCEl.checked;
+
+    pairs.forEach((pair, idx) => {
+      const u = pair.user, a = pair.assistant;
+      const ratingVal = getRatingForAssistant(a, ratingMap);
+      const row = [
+        idx+1,
+        u ? fmtTime(u.ts, useUTC) : "",
+        csvEscape(u?.content || ""),
+        a ? fmtTime(a.ts, useUTC) : "",
+        csvEscape(a?.content || ""),
+        ratingVal == null ? "" : ratingVal,
+        u && a ? diffSeconds(u.ts, a.ts) : "",
+        u?.eventId || "",
+        a?.eventId || "",
+        (u?.userId || a?.userId || ""),
+        (u?.sessionId || a?.sessionId || ""),
+      ];
+      lines.push(row.join(","));
+    });
+    return lines.join("\n");
+  }
+  function csvEscape(s) {
+    const str = (s ?? "").toString().replaceAll('"','""');
+    if (/[",\n]/.test(str)) return `"${str}"`;
+    return str;
+  }
+
+  // 逐日列舉 YYYY-MM-DD（含兩端）
+  function enumerateDates(from, to) {
+    const start = new Date(from + "T00:00:00");
+    const end = new Date((to || from) + "T00:00:00");
+    const out = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = new Date(d.getTime() + 86400000)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  }
+
+  async function fetchOne(url) {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseJSONFlexible(data);
+  }
+
+  async function loadAndRender() {
+    const startVal = getPickerDate("start");
+    const endVal = getPickerDate("end");
+
+    daysRoot.innerHTML = `<div class="card empty">載入中…</div>`;
+
+    try {
+      let arr = [];
+
+      if (!startVal && !endVal) {
+        arr = await fetchOne(API_BASE);
+      } else {
+        const from = startVal || endVal;
+        const to = endVal || startVal || from;
+        const days = enumerateDates(from, to);
+        const joiner = API_BASE.includes("?") ? "&" : "?";
+        const results = await Promise.allSettled(
+          days.map(d => fetchOne(`${API_BASE}${joiner}day=${d}`))
+        );
+        arr = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      }
+
+      rawLogs = arr
+        .filter(x => x && x.ts && x.role && typeof x.content !== "undefined")
+        .map(x => ({
+          ts: x.ts,
+          userId: x.userId ?? "",
+          sessionId: x.sessionId ?? "",
+          role: x.role,
+          content: x.content ?? "",
+          eventId: x.eventId ?? "",
+          // 若後端已提供，保留；否則從 content 解析（在 buildRatingMap 會處理）
+          rating: typeof x.rating === "number" ? x.rating : undefined,
+          feedbackTargetId: x.feedbackTargetId ?? undefined, // << 保留可能由後端合併後提供的 target
+          targetEventId: x.targetEventId ?? undefined,
+        }))
+        .sort((a,b) => new Date(a.ts) - new Date(b.ts));
+
+      await renderAll();
+    } catch (e) {
+      console.error(e);
+      daysRoot.innerHTML = `<div class="card empty">載入失敗：${escapeHTML(String(e))}<br/>請確認此檔案與 API 是否同網域，以及 API 路由可用。</div>`;
+    }
+  }
+
+  async function renderAll() {
+    await renderLeaderboardOnly();
+    renderDetails();
+  }
+
+  // 通用工具
+  function escapeHTML(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function parseJSONFlexible(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.logs)) return data.logs;
+    return [];
+  }
+  function toDateKey(ts, useUTC) {
+    const d = new Date(ts);
+    if (useUTC) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const day = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    } else {
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+  function fmtTime(ts, useUTC) {
+    const d = new Date(ts);
+    const y = useUTC ? d.getUTCFullYear() : d.getFullYear();
+    const m = (useUTC ? d.getUTCMonth() : d.getMonth())+1;
+    const day = useUTC ? d.getUTCDate() : d.getDate();
+    const hh = String(useUTC ? d.getUTCHours() : d.getHours()).padStart(2,"0");
+    const mm = String(useUTC ? d.getUTCMinutes() : d.getMinutes()).padStart(2,"0");
+    const ss = String(useUTC ? d.getUTCSeconds() : d.getSeconds()).padStart(2,"0");
+    return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")} ${hh}:${mm}:${ss}`;
+  }
+  function diffSeconds(aTs, bTs) {
+    if (!aTs || !bTs) return null;
+    const a = new Date(aTs).getTime();
+    const b = new Date(bTs).getTime();
+    return Math.max(0, Math.round((b - a)/1000));
+  }
+  function applyFilters(logs) {
+    const useUTC = useUTCEl.checked;
+    const startStr = getPickerDate("start");
+    const endStr = getPickerDate("end");
+    const start = startStr ? new Date(startStr + (useUTC ? "T00:00:00Z" : "T00:00:00")) : null;
+    const end = endStr ? new Date(endStr + (useUTC ? "T23:59:59Z" : "T23:59:59")) : null;
+    const q = (searchInput.value || "").trim().toLowerCase();
+
+    return logs.filter(item => {
+      const t = new Date(item.ts);
+      if (start && t < start) return false;
+      if (end && t > end) return false;
+      if (q) {
+        const hay = `${item.role}|${item.userId}|${item.sessionId}|${item.eventId}|${item.content}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function groupByDate(logs) {
+    const useUTC = useUTCEl.checked;
+    const map = new Map();
+    for (const it of logs) {
+      const key = toDateKey(it.ts, useUTC);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    }
+    return [...map.entries()].sort((a,b) => new Date(b[0]) - new Date(a[0]));
+  }
+  function pairByOrder(dayLogs) {
+    const pairs = [];
+    let pendingUser = null;
+    for (const log of dayLogs) {
+      if (log.role === "user") {
+        if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+        pendingUser = log;
+      } else if (log.role === "assistant") {
+        if (pendingUser) {
+          pairs.push({ user: pendingUser, assistant: log });
+          pendingUser = null;
+        } else {
+          pairs.push({ user: null, assistant: log });
+        }
+      } else {
+        pairs.push({ user: log.role === "user" ? log : null, assistant: log.role === "assistant" ? log : null, other: log });
+      }
+    }
+    if (pendingUser) pairs.push({ user: pendingUser, assistant: null });
+    return pairs;
+  }
+
+  // 首次載入
+  await loadAndRender();
+})();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
