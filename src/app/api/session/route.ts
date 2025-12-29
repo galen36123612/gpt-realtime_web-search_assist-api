@@ -83,8 +83,7 @@ export async function GET() {
 
 // 0811 V1
 
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+/*importimportㄥi port { NextR s onse } from "nrver"; i port {  o kies } from "next/h;
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs"; // 用 Node.js runtime
@@ -142,7 +141,76 @@ export async function GET() {
       { status: 500 }
     );
   }
+}*/
+
+// 1229 GA version
+
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
+
+export const runtime = "nodejs";
+
+export async function GET() {
+  try {
+    const cookieStore = cookies();
+    let userId = cookieStore.get("anonId")?.value;
+    const needSetCookie = !userId;
+    if (!userId) userId = randomUUID();
+
+    const sessionId = randomUUID();
+
+    const resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        expires_after: { anchor: "created_at", seconds: 600 },
+        session: {
+          type: "realtime",
+          model: "gpt-realtime",
+          // 也可先塞音訊設定（可選）
+          audio: { output: { voice: "shimmer" } },
+        },
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      return NextResponse.json({ error: "OpenAI error", detail: data }, { status: resp.status });
+    }
+
+    // 注意：client_secrets 回的是頂層 value/expires_at
+    const res = NextResponse.json({
+      userId,
+      sessionId,
+      client_secret: { value: data.value, expires_at: data.expires_at }, // 做成你前端期待的樣子
+      session: data.session,
+    });
+
+    if (needSetCookie) {
+      res.cookies.set({
+        name: "anonId",
+        value: userId,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    return res;
+  } catch (error: any) {
+    console.error("Error in /api/session:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error", detail: String(error?.message || error) },
+      { status: 500 }
+    );
+  }
 }
+
 
 
 
