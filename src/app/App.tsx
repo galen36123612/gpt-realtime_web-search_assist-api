@@ -18270,6 +18270,7 @@ function AppContent() {
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
 
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ✅ NEW: 永遠用 ref 發送事件
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("DISCONNECTED");
@@ -18516,13 +18517,17 @@ function AppContent() {
     return text;
   }
 
+  // ✅ NEW: 永遠用 dataChannelRef 送事件，避免 state 還沒更新就送出失敗
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
-    if (dataChannel && dataChannel.readyState === "open") {
+    const dc = dataChannelRef.current;
+    if (dc && dc.readyState === "open") {
       logClientEvent(eventObj, eventNameSuffix);
-      dataChannel.send(JSON.stringify(eventObj));
+      dc.send(JSON.stringify(eventObj));
     } else {
       logClientEvent({ attemptedEvent: eventObj.type }, "error.data_channel_not_open");
-      console.error("Failed to send message - no data channel available", eventObj);
+      console.error("Failed to send message - no data channel available", eventObj, {
+        readyState: dc?.readyState,
+      });
     }
   };
 
@@ -18588,18 +18593,22 @@ function AppContent() {
         console.log("🔗 Session ID set:", data.sessionId.substring(0, 8) + "...");
       }
 
-      if (!data.client_secret?.value) {
+      // ✅ 兼容：你後端可能回 client_secret.value 或 value
+      const EPHEMERAL_KEY = data?.client_secret?.value || data?.value;
+      if (!EPHEMERAL_KEY) {
         logClientEvent(data, "error.no_ephemeral_key");
         console.error("No ephemeral key provided by the server");
         setSessionStatus("DISCONNECTED");
         return;
       }
 
-      const EPHEMERAL_KEY = data.client_secret.value;
-
       // WebRTC 設置
       const pc = new RTCPeerConnection();
       peerConnection.current = pc;
+
+      // (可選) debug
+      pc.onconnectionstatechange = () => console.log("pc.connectionState:", pc.connectionState);
+      pc.oniceconnectionstatechange = () => console.log("pc.iceConnectionState:", pc.iceConnectionState);
 
       audioElement.current = document.createElement("audio");
       audioElement.current.autoplay = isAudioPlaybackEnabled;
@@ -18613,7 +18622,10 @@ function AppContent() {
       pc.addTrack(newMs.getTracks()[0]);
 
       const dc = pc.createDataChannel("oai-events");
+      dataChannelRef.current = dc; // ✅ ref 先設起來
       setDataChannel(dc);
+
+      console.log("dc initial state:", dc.readyState);
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
@@ -18623,6 +18635,8 @@ function AppContent() {
 
       dc.addEventListener("close", () => {
         logClientEvent({}, "data_channel.close");
+        dataChannelRef.current = null; // ✅ 清 ref
+        setDataChannel(null);
         setSessionStatus("DISCONNECTED");
       });
 
@@ -18876,7 +18890,6 @@ function AppContent() {
                           eventId: `assistant_run_ok_${call.call_id}`,
                         });
 
-                        // ✅ 回寫 thread_id，讓下一次能延續同一條 assistant thread
                         if (data?.thread_id && typeof data.thread_id === "string") {
                           setAssistantThreadId(data.thread_id);
                         }
@@ -18896,7 +18909,6 @@ function AppContent() {
                       continue;
                     }
 
-                    // 其他 tool：目前不處理
                     postLog({
                       role: "system",
                       content: `[TOOL SKIPPED] name=${String(call.name)} (no handler)`,
@@ -18904,7 +18916,6 @@ function AppContent() {
                     });
                   }
 
-                  // ✅ 工具都做完後，務必再觸發一次 response.create
                   sendClientEvent({ type: "response.create" }, "(trigger response after tools)");
                 } catch (err) {
                   console.error("💥 tool handler failed:", err);
@@ -18917,7 +18928,6 @@ function AppContent() {
               })();
             }
 
-            // ⚠️ 這次 done 是「工具回合」，不記 assistant 最終回答
             conversationState.current.currentAssistantResponse = {
               isActive: false,
               responseId: null,
@@ -18928,7 +18938,7 @@ function AppContent() {
             return;
           }
 
-          // ✅ 7.1：一般「文字/語音回答」完成，照原本流程記錄
+          // ✅ 7.1：一般「文字/語音回答」完成
           const assistantResponse = conversationState.current.currentAssistantResponse;
           let finalText = assistantResponse.textBuffer.trim();
 
@@ -19054,14 +19064,26 @@ function AppContent() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // ✅ 官方新版：ephemeral key 直接 POST 到 /v1/realtime/calls（不再用 ?model=...）
+      if (!offer.sdp) {
+        throw new Error("Failed to create SDP offer");
+      }
+
+      // ✅ 修正：/v1/realtime/calls 用 FormData 傳 sdp（不要再用 Content-Type: application/sdp 直接丟字串）
+      const fd = new FormData();
+      fd.append("sdp", new Blob([offer.sdp], { type: "application/sdp" }), "offer.sdp");
+
+      // 如果你的 /api/session 有回 session（我之前提供的版本會回），可以一起帶上（可選）
+      if (data?.session) {
+        fd.append("session", new Blob([JSON.stringify(data.session)], { type: "application/json" }), "session.json");
+      }
+
       const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
-        body: offer.sdp,
         headers: {
           Authorization: `Bearer ${EPHEMERAL_KEY}`,
-          "Content-Type": "application/sdp",
+          // ✅ 不要手動設定 Content-Type，瀏覽器會自動帶 multipart boundary
         },
+        body: fd,
       });
 
       if (!sdpResponse.ok) {
@@ -19080,6 +19102,9 @@ function AppContent() {
   }
 
   function stopSession() {
+    // ✅ 清 ref/state
+    dataChannelRef.current = null;
+
     if (dataChannel) {
       dataChannel.close();
       setDataChannel(null);
@@ -19131,7 +19156,6 @@ function AppContent() {
 - 當問題需要最新的外部資訊（新聞、價格、政策、版本更新）時，先呼叫 web_search，再用搜尋結果回答並附上來源。
 - 當你需要使用我們已配置好的 OpenAI Assistant（長指令/固定風格/長期狀態）來回答時，先呼叫 assistant_run，把使用者問題原文帶入；工具回傳的 JSON 會有 answer 欄位，請以 answer 為主輸出。`;
 
-    // ✅ web_search function tool（如果 agentConfig 沒定義，就補上）
     const webSearchTool = {
       type: "function",
       name: "web_search",
@@ -19151,12 +19175,10 @@ function AppContent() {
       },
     };
 
-    // ✅ assistant_run function tool（你後端會用 ASSISTANT_ID 執行 Assistants API）
     const assistantRunTool = {
       type: "function",
       name: "assistant_run",
-      description:
-        "Run the configured OpenAI Assistant via server and return JSON with answer + thread_id.",
+      description: "Run the configured OpenAI Assistant via server and return JSON with answer + thread_id.",
       parameters: {
         type: "object",
         properties: {
@@ -19179,7 +19201,6 @@ function AppContent() {
     const sessionUpdateEvent = {
       type: "session.update",
       session: {
-        // ✅ 建議補上（與官方示例一致）
         type: "realtime",
         modalities: ["text", "audio"],
         instructions,
@@ -19190,6 +19211,7 @@ function AppContent() {
         tool_choice: "auto",
       },
     };
+
     sendClientEvent(sessionUpdateEvent, "agent.tools + web_search + assistant_run");
   };
 
@@ -19230,7 +19252,9 @@ function AppContent() {
   };
 
   const handleTalkButtonDown = () => {
-    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open") return;
+    const dc = dataChannelRef.current;
+    if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open") return;
+
     cancelAssistantSpeech();
     setIsPTTUserSpeaking(true);
     setIsListening(true);
@@ -19238,7 +19262,9 @@ function AppContent() {
   };
 
   const handleTalkButtonUp = () => {
-    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open" || !isPTTUserSpeaking) return;
+    const dc = dataChannelRef.current;
+    if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open" || !isPTTUserSpeaking) return;
+
     setIsPTTUserSpeaking(false);
     setIsListening(false);
     sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
@@ -19383,6 +19409,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
