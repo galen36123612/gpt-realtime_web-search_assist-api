@@ -255,99 +255,60 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const runtime = "nodejs"; // 用 Node.js runtime
 
 export async function GET() {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
-    }
-
-    // ✅ Next 版本差異：cookies() 可能是同步也可能是 Promise；await 兩邊都安全
-    const cookieStore = await cookies();
-
+    // 1) 讀/建匿名 userId
+    const cookieStore = await cookies(); // ← 這裡用 await，避免型別是 Promise
     let userId = cookieStore.get("anonId")?.value;
     const needSetCookie = !userId;
     if (!userId) userId = randomUUID();
 
+    // 2) 產生這次連線的 sessionId
     const sessionId = randomUUID();
 
-    // ✅ 建立 Realtime client secret（ephemeral key）
-    // 重點：output_modalities 要包含 text，否則你前端可能收不到文字輸出事件
-    const resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+    // 3) 向 OpenAI 建立 Realtime ephemeral session
+    const resp = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
-      cache: "no-store",
       body: JSON.stringify({
-        expires_after: { anchor: "created_at", seconds: 600 },
-        session: {
-          type: "realtime",
-          model: "gpt-realtime",
-          output_modalities: ["audio", "text"],
-          audio: {
-            input: {
-              transcription: { model: "whisper-1" },
-            },
-            output: {
-              voice: "shimmer",
-            },
-          },
-        },
+        model: "gpt-4o-realtime-preview-2024-12-17",
+        // 或換你之前那個 2025-06-03 預覽型號都行
       }),
     });
 
     const data = await resp.json();
 
-    if (!resp.ok) {
-      console.error("OpenAI client_secrets error:", resp.status, data);
-      return NextResponse.json(
-        {
-          error: "Failed to create realtime client secret",
-          status: resp.status,
-          details: data,
-        },
-        { status: 500 }
-      );
-    }
+    // 4) 回傳 ephemeral key + 我們自己的 userId / sessionId
+    const res = NextResponse.json({
+      ...data,
+      userId,
+      sessionId,
+    });
 
-    // ✅ 為了相容你前端舊寫法：仍回傳 client_secret.value
-    const res = NextResponse.json(
-      {
-        userId,
-        sessionId,
-        client_secret: { value: data?.value, expires_at: data?.expires_at },
-        session: data?.session,
-        // 也一併回 value（有些前端會直接拿 data.value）
-        value: data?.value,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
-    );
-
+    // 5) 只有在沒有 anonId 時才設 cookie（用 NextResponse 設）
     if (needSetCookie) {
       res.cookies.set({
         name: "anonId",
         value: userId,
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
         path: "/",
-        maxAge: 60 * 60 * 24 * 365,
+        maxAge: 60 * 60 * 24 * 365, // 1 年
       });
     }
 
     return res;
   } catch (error: any) {
     console.error("Error in /api/session:", error);
-    return NextResponse.json({ error: "Internal Server Error", detail: String(error?.message || error) }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error", detail: String(error?.message || error) },
+      { status: 500 }
+    );
   }
 }
 
