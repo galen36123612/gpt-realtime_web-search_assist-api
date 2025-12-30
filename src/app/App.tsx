@@ -20211,9 +20211,23 @@ function AppContent() {
 
     const instructions = `${currentAgent?.instructions || ""}
 
-- 當問題需要公司/內部文件或知識庫內容時，請先使用 file_search 檢索向量庫，並在回答中附上來源。
-- 當問題需要最新的外部資訊（新聞、價格、政策、版本更新）時，先呼叫 web_search，再用搜尋結果回答並附上來源。
-- 當你需要使用我們已配置好的 OpenAI Assistant（長指令/固定風格/長期狀態）來回答時，先呼叫 assistant_run，把使用者問題原文帶入；工具回傳的 JSON 會有 answer 欄位，請以 answer 為主輸出。`;
+【工具使用規則（很重要，請嚴格遵守）】
+
+1) 內部/知識庫（優先 assistant_run）
+- 只要使用者提到以下任一關鍵字：「知識庫」「內部資料」「公司文件」「手冊」「SOP」「規範」「文件查詢」「內部流程」「內規」
+  或者問題明顯需要查內部內容（例如：公司制度、內部產品資料、內訓文件、作業流程），就「必須」先呼叫 assistant_run。
+- assistant_run 的 input 必須是「使用者原句完整問題」，不要改寫、不要縮短、更不要變成「去知識庫找」之類的指令句。
+- assistant_run 回傳 JSON 會有 answer 欄位；最終回覆請以 answer 為主（可再加上必要的補充，但不要忽略 answer）。
+
+2) file_search（只有在需要引用向量庫檔案時才用）
+- 當你需要引用向量庫內的檔案內容並產生引用（citations）時，才使用 file_search。
+- 若已符合第 1) 條（內部/知識庫），請先 assistant_run；不要先 file_search，除非 assistant_run 回覆明確要求你再用 file_search 補強引用。
+
+3) 外部最新資訊（web_search）
+- 當問題需要最新外部資訊（新聞、價格、政策、版本更新、即時資訊）時，先呼叫 web_search，再用搜尋結果回答並附上來源。
+
+【輸出要求】
+- 工具回傳後再回答，不要在工具結果回來前自行猜測。`;
 
     // ✅ web_search function tool（如果 agentConfig 沒定義，就補上）
     const webSearchTool = {
