@@ -18197,7 +18197,7 @@ function App() {
 export default App;*/
 
 // 1229 realtime + web search + assist
-
+// 1230 realtime + web search + assist V1
 "use client";
 
 import React, { useEffect, useRef, useState, Suspense } from "react";
@@ -18270,7 +18270,7 @@ function AppContent() {
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
 
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ✅ NEW: 永遠用 ref 發送事件
+  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ✅ 永遠用 ref 發送事件
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("DISCONNECTED");
@@ -18357,6 +18357,16 @@ function AppContent() {
     }>
   >([]);
 
+  // ✅ autoplay 解鎖：一定要在 user gesture 事件內呼叫才穩
+  const ensureAudioPlayback = () => {
+    if (!isAudioPlaybackEnabled) return;
+    const el = audioElement.current;
+    if (!el) return;
+    el.play().catch((err) => {
+      console.warn("🔇 Audio playback blocked (need user gesture):", err);
+    });
+  };
+
   // 🆕 對話配對日誌函數
   function logConversationPair(
     userMsg: { content: string; eventId: string; timestamp: number },
@@ -18393,7 +18403,7 @@ function AppContent() {
       });
   }
 
-  // 🔧 更新的 reallyPostLog 函數
+  // 🔧 reallyPostLog
   async function reallyPostLog(log: {
     role: LogRole;
     content: string;
@@ -18445,7 +18455,6 @@ function AppContent() {
     }
   }
 
-  // 保留原本的 postLog
   function postLog(log: {
     role: LogRole;
     content: string;
@@ -18517,7 +18526,7 @@ function AppContent() {
     return text;
   }
 
-  // ✅ NEW: 永遠用 dataChannelRef 送事件，避免 state 還沒更新就送出失敗
+  // ✅ 永遠用 dataChannelRef 送事件
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     const dc = dataChannelRef.current;
     if (dc && dc.readyState === "open") {
@@ -18606,14 +18615,18 @@ function AppContent() {
       const pc = new RTCPeerConnection();
       peerConnection.current = pc;
 
-      // (可選) debug
+      // debug
       pc.onconnectionstatechange = () => console.log("pc.connectionState:", pc.connectionState);
       pc.oniceconnectionstatechange = () => console.log("pc.iceConnectionState:", pc.iceConnectionState);
 
       audioElement.current = document.createElement("audio");
-      audioElement.current.autoplay = isAudioPlaybackEnabled;
+      audioElement.current.autoplay = true; // 先開啟，真正解鎖靠 ensureAudioPlayback()
       pc.ontrack = (e) => {
-        if (audioElement.current) audioElement.current.srcObject = e.streams[0];
+        if (audioElement.current) {
+          audioElement.current.srcObject = e.streams[0];
+          // 這裡嘗試 play（可能被擋，但不影響）
+          audioElement.current.play().catch(() => {});
+        }
       };
 
       const newMs = await navigator.mediaDevices.getUserMedia({
@@ -18622,7 +18635,7 @@ function AppContent() {
       pc.addTrack(newMs.getTracks()[0]);
 
       const dc = pc.createDataChannel("oai-events");
-      dataChannelRef.current = dc; // ✅ ref 先設起來
+      dataChannelRef.current = dc;
       setDataChannel(dc);
 
       console.log("dc initial state:", dc.readyState);
@@ -18635,7 +18648,7 @@ function AppContent() {
 
       dc.addEventListener("close", () => {
         logClientEvent({}, "data_channel.close");
-        dataChannelRef.current = null; // ✅ 清 ref
+        dataChannelRef.current = null;
         setDataChannel(null);
         setSessionStatus("DISCONNECTED");
       });
@@ -18756,7 +18769,7 @@ function AppContent() {
           }
         }
 
-        // 7️⃣ 助手回應完成 - ✅支援 function_call(web_search / assistant_run) + 配對記錄 + citation 抽取
+        // 7️⃣ 助手回應完成 - function_call(web_search / assistant_run)
         const RESPONSE_DONE_EVENTS = ["response.done", "response.completed"];
         if (RESPONSE_DONE_EVENTS.includes(eventType)) {
           const outputItems = eventData?.response?.output || [];
@@ -18843,7 +18856,7 @@ function AppContent() {
                       continue;
                     }
 
-                    // ✅ B) assistant_run (Assistants API 透過你後端執行)
+                    // ✅ B) assistant_run（Assistants API）
                     if (call.name === "assistant_run") {
                       const input = String(args.input || args.query || "").trim();
                       const providedThread = String(args.thread_id || "").trim();
@@ -18916,7 +18929,18 @@ function AppContent() {
                     });
                   }
 
-                  sendClientEvent({ type: "response.create" }, "(trigger response after tools)");
+                  // ✅ tool 完成後：強制只輸出 answer
+                  sendClientEvent(
+                    {
+                      type: "response.create",
+                      response: {
+                        output_modalities: ["audio", "text"],
+                        instructions:
+                          "你剛剛收到工具輸出(JSON)。若 JSON 內含 answer 欄位，請直接輸出 answer 的文字內容（不要輸出 JSON、不要加前後贅字）。若沒有 answer，請用 JSON 內容合理回覆。",
+                      },
+                    },
+                    "(trigger response after tools)"
+                  );
                 } catch (err) {
                   console.error("💥 tool handler failed:", err);
                   postLog({
@@ -19060,7 +19084,7 @@ function AppContent() {
         }
       });
 
-      // ✅ 創建 WebRTC offer
+      // ✅ Create offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
@@ -19068,22 +19092,14 @@ function AppContent() {
         throw new Error("Failed to create SDP offer");
       }
 
-      // ✅ 修正：/v1/realtime/calls 用 FormData 傳 sdp（不要再用 Content-Type: application/sdp 直接丟字串）
-      const fd = new FormData();
-      fd.append("sdp", new Blob([offer.sdp], { type: "application/sdp" }), "offer.sdp");
-
-      // 如果你的 /api/session 有回 session（我之前提供的版本會回），可以一起帶上（可選）
-      if (data?.session) {
-        fd.append("session", new Blob([JSON.stringify(data.session)], { type: "application/json" }), "session.json");
-      }
-
+      // ✅ 重要修正：ephemeral token 連線時，必須用純 SDP body + Content-Type: application/sdp
       const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${EPHEMERAL_KEY}`,
-          // ✅ 不要手動設定 Content-Type，瀏覽器會自動帶 multipart boundary
+          "Content-Type": "application/sdp",
         },
-        body: fd,
+        body: offer.sdp,
       });
 
       if (!sdpResponse.ok) {
@@ -19102,7 +19118,6 @@ function AppContent() {
   }
 
   function stopSession() {
-    // ✅ 清 ref/state
     dataChannelRef.current = null;
 
     if (dataChannel) {
@@ -19198,17 +19213,35 @@ function AppContent() {
       ...(hasAssistantRun ? [] : [assistantRunTool]),
     ];
 
+    // ✅ 重要：session.update 明確設定 output_modalities + transcription + turn_detection
+    // 同時保留 modalities / input_audio_transcription / turn_detection（相容舊欄位）
     const sessionUpdateEvent = {
       type: "session.update",
       session: {
         type: "realtime",
-        modalities: ["text", "audio"],
         instructions,
-        voice: "shimmer",
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: turnDetection,
-        tools,
         tool_choice: "auto",
+        tools,
+
+        // ✅ GA 建議：output_modalities
+        output_modalities: ["audio", "text"],
+
+        // ✅ 相容一些舊實作（你原本用的 modalities）
+        modalities: ["audio", "text"],
+
+        // ✅ GA 音訊設定（STT + VAD）
+        audio: {
+          input: {
+            transcription: { model: "whisper-1" },
+            turn_detection: turnDetection ?? null,
+          },
+          // ⚠️ 不在 update 改 voice（避免 voice 限制）；voice 在 /api/session 建立 client_secret 時設定即可
+          // output: { voice: "shimmer" },
+        },
+
+        // ✅ 舊欄位相容（有些版本仍會吃）
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: turnDetection ?? null,
       },
     };
 
@@ -19227,6 +19260,7 @@ function AppContent() {
   };
 
   const handleSendTextMessage = () => {
+    ensureAudioPlayback(); // ✅ 解鎖音訊
     const textToSend = userText.trim();
     if (!textToSend) return;
 
@@ -19248,10 +19282,16 @@ function AppContent() {
     };
 
     setUserText("");
-    sendClientEvent({ type: "response.create" }, "(trigger response)");
+
+    // ✅ 每次 response.create 都指定 output_modalities，保證同時有 text + audio
+    sendClientEvent(
+      { type: "response.create", response: { output_modalities: ["audio", "text"] } },
+      "(trigger response)"
+    );
   };
 
   const handleTalkButtonDown = () => {
+    ensureAudioPlayback(); // ✅ 解鎖音訊
     const dc = dataChannelRef.current;
     if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open") return;
 
@@ -19262,16 +19302,23 @@ function AppContent() {
   };
 
   const handleTalkButtonUp = () => {
+    ensureAudioPlayback(); // ✅ 解鎖音訊
     const dc = dataChannelRef.current;
     if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open" || !isPTTUserSpeaking) return;
 
     setIsPTTUserSpeaking(false);
     setIsListening(false);
     sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
-    sendClientEvent({ type: "response.create" }, "trigger response PTT");
+
+    // ✅ 每次 response.create 都指定 output_modalities
+    sendClientEvent(
+      { type: "response.create", response: { output_modalities: ["audio", "text"] } },
+      "trigger response PTT"
+    );
   };
 
   const handleMicrophoneClick = () => {
+    ensureAudioPlayback(); // ✅ 解鎖音訊
     if (isOutputAudioBufferActive) {
       cancelAssistantSpeech();
       return;
@@ -19409,6 +19456,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
