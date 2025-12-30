@@ -145,7 +145,7 @@ export async function GET() {
 
 // 1229 GA version
 
-import { NextResponse } from "next/server";
+/*import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 
@@ -247,7 +247,110 @@ export async function GET() {
       { status: 500 }
     );
   }
+}*/
+
+// 1230 realtime + assist run v1
+
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET() {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
+    }
+
+    // ✅ Next 版本差異：cookies() 可能是同步也可能是 Promise；await 兩邊都安全
+    const cookieStore = await cookies();
+
+    let userId = cookieStore.get("anonId")?.value;
+    const needSetCookie = !userId;
+    if (!userId) userId = randomUUID();
+
+    const sessionId = randomUUID();
+
+    // ✅ 建立 Realtime client secret（ephemeral key）
+    // 重點：output_modalities 要包含 text，否則你前端可能收不到文字輸出事件
+    const resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        expires_after: { anchor: "created_at", seconds: 600 },
+        session: {
+          type: "realtime",
+          model: "gpt-realtime",
+          output_modalities: ["audio", "text"],
+          audio: {
+            input: {
+              transcription: { model: "whisper-1" },
+            },
+            output: {
+              voice: "shimmer",
+            },
+          },
+        },
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      console.error("OpenAI client_secrets error:", resp.status, data);
+      return NextResponse.json(
+        {
+          error: "Failed to create realtime client secret",
+          status: resp.status,
+          details: data,
+        },
+        { status: 500 }
+      );
+    }
+
+    // ✅ 為了相容你前端舊寫法：仍回傳 client_secret.value
+    const res = NextResponse.json(
+      {
+        userId,
+        sessionId,
+        client_secret: { value: data?.value, expires_at: data?.expires_at },
+        session: data?.session,
+        // 也一併回 value（有些前端會直接拿 data.value）
+        value: data?.value,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+
+    if (needSetCookie) {
+      res.cookies.set({
+        name: "anonId",
+        value: userId,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    return res;
+  } catch (error: any) {
+    console.error("Error in /api/session:", error);
+    return NextResponse.json({ error: "Internal Server Error", detail: String(error?.message || error) }, { status: 500 });
+  }
 }
+
 
 
 
