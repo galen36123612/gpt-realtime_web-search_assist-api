@@ -18196,8 +18196,6 @@ function App() {
 
 export default App;*/
 
-// 1229 realtime + web search + assist
-// 1230 realtime + web search + assist V1
 "use client";
 
 import React, { useEffect, useRef, useState, Suspense } from "react";
@@ -18267,10 +18265,11 @@ function AppContent() {
   const { logClientEvent, logServerEvent } = useEvent();
 
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
-  const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(null);
+  const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<AgentConfig[] | null>(
+    null
+  );
 
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ✅ 永遠用 ref 發送事件
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("DISCONNECTED");
@@ -18310,18 +18309,6 @@ function AppContent() {
   const [userId, setUserId] = useState<string>("");
   const [sessionId, setSessionId] = useState<string>("");
 
-  // ✅ 讓 Assistants API 保持同一個 thread（可選）
-  const [assistantThreadId, setAssistantThreadId] = useState<string>("");
-
-  // 讓 thread_id 跨 reload 仍可延續（可自行拿掉）
-  useEffect(() => {
-    const saved = localStorage.getItem("assistantThreadId");
-    if (saved) setAssistantThreadId(saved);
-  }, []);
-  useEffect(() => {
-    if (assistantThreadId) localStorage.setItem("assistantThreadId", assistantThreadId);
-  }, [assistantThreadId]);
-
   // 🔄 新的對話管理系統
   const conversationState = useRef({
     currentUserMessage: null as { content: string; eventId: string; timestamp: number } | null,
@@ -18357,16 +18344,6 @@ function AppContent() {
     }>
   >([]);
 
-  // ✅ autoplay 解鎖：一定要在 user gesture 事件內呼叫才穩
-  const ensureAudioPlayback = () => {
-    if (!isAudioPlaybackEnabled) return;
-    const el = audioElement.current;
-    if (!el) return;
-    el.play().catch((err) => {
-      console.warn("🔇 Audio playback blocked (need user gesture):", err);
-    });
-  };
-
   // 🆕 對話配對日誌函數
   function logConversationPair(
     userMsg: { content: string; eventId: string; timestamp: number },
@@ -18392,10 +18369,10 @@ function AppContent() {
       })
       .then(() => {
         console.log(
-          `📝 Logged conversation pair: Q(${userMsg.content.slice(0, 30)}...) -> A(${assistantMsg.content.slice(
+          `📝 Logged conversation pair: Q(${userMsg.content.slice(
             0,
             30
-          )}...)`
+          )}...) -> A(${assistantMsg.content.slice(0, 30)}...)`
         );
       })
       .catch((error) => {
@@ -18403,7 +18380,7 @@ function AppContent() {
       });
   }
 
-  // 🔧 reallyPostLog
+  // 🔧 更新的 reallyPostLog 函數
   async function reallyPostLog(log: {
     role: LogRole;
     content: string;
@@ -18455,6 +18432,7 @@ function AppContent() {
     }
   }
 
+  // 保留原本的 postLog
   function postLog(log: {
     role: LogRole;
     content: string;
@@ -18526,17 +18504,13 @@ function AppContent() {
     return text;
   }
 
-  // ✅ 永遠用 dataChannelRef 送事件
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
-    const dc = dataChannelRef.current;
-    if (dc && dc.readyState === "open") {
+    if (dataChannel && dataChannel.readyState === "open") {
       logClientEvent(eventObj, eventNameSuffix);
-      dc.send(JSON.stringify(eventObj));
+      dataChannel.send(JSON.stringify(eventObj));
     } else {
       logClientEvent({ attemptedEvent: eventObj.type }, "error.data_channel_not_open");
-      console.error("Failed to send message - no data channel available", eventObj, {
-        readyState: dc?.readyState,
-      });
+      console.error("Failed to send message - no data channel available", eventObj);
     }
   };
 
@@ -18602,31 +18576,23 @@ function AppContent() {
         console.log("🔗 Session ID set:", data.sessionId.substring(0, 8) + "...");
       }
 
-      // ✅ 兼容：你後端可能回 client_secret.value 或 value
-      const EPHEMERAL_KEY = data?.client_secret?.value || data?.value;
-      if (!EPHEMERAL_KEY) {
+      if (!data.client_secret?.value) {
         logClientEvent(data, "error.no_ephemeral_key");
         console.error("No ephemeral key provided by the server");
         setSessionStatus("DISCONNECTED");
         return;
       }
 
+      const EPHEMERAL_KEY = data.client_secret.value;
+
       // WebRTC 設置
       const pc = new RTCPeerConnection();
       peerConnection.current = pc;
 
-      // debug
-      pc.onconnectionstatechange = () => console.log("pc.connectionState:", pc.connectionState);
-      pc.oniceconnectionstatechange = () => console.log("pc.iceConnectionState:", pc.iceConnectionState);
-
       audioElement.current = document.createElement("audio");
-      audioElement.current.autoplay = true; // 先開啟，真正解鎖靠 ensureAudioPlayback()
+      audioElement.current.autoplay = isAudioPlaybackEnabled;
       pc.ontrack = (e) => {
-        if (audioElement.current) {
-          audioElement.current.srcObject = e.streams[0];
-          // 這裡嘗試 play（可能被擋，但不影響）
-          audioElement.current.play().catch(() => {});
-        }
+        if (audioElement.current) audioElement.current.srcObject = e.streams[0];
       };
 
       const newMs = await navigator.mediaDevices.getUserMedia({
@@ -18635,10 +18601,7 @@ function AppContent() {
       pc.addTrack(newMs.getTracks()[0]);
 
       const dc = pc.createDataChannel("oai-events");
-      dataChannelRef.current = dc;
       setDataChannel(dc);
-
-      console.log("dc initial state:", dc.readyState);
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
@@ -18648,8 +18611,6 @@ function AppContent() {
 
       dc.addEventListener("close", () => {
         logClientEvent({}, "data_channel.close");
-        dataChannelRef.current = null;
-        setDataChannel(null);
         setSessionStatus("DISCONNECTED");
       });
 
@@ -18726,9 +18687,7 @@ function AppContent() {
         if (eventType === "response.audio_transcript.done") {
           const transcript = eventData.transcript || "";
           if (transcript && conversationState.current.currentAssistantResponse.isActive) {
-            if (
-              conversationState.current.currentAssistantResponse.audioTranscriptBuffer.length < transcript.length
-            ) {
+            if (conversationState.current.currentAssistantResponse.audioTranscriptBuffer.length < transcript.length) {
               conversationState.current.currentAssistantResponse.audioTranscriptBuffer = transcript;
             }
           }
@@ -18769,189 +18728,103 @@ function AppContent() {
           }
         }
 
-        // 7️⃣ 助手回應完成 - function_call(web_search / assistant_run)
+        // 7️⃣ 助手回應完成 - ✅支援 function_call(web_search) + 配對記錄 + citation 抽取
         const RESPONSE_DONE_EVENTS = ["response.done", "response.completed"];
         if (RESPONSE_DONE_EVENTS.includes(eventType)) {
+          // ✅ 7.0：如果這次 response.done 是工具呼叫（function_call），先做工具再回填結果
           const outputItems = eventData?.response?.output || [];
           const functionCalls = Array.isArray(outputItems)
             ? outputItems.filter((it: any) => it?.type === "function_call" && it?.call_id && it?.name)
             : [];
 
           if (functionCalls.length) {
+            // 避免 response.done + response.completed 重複觸發同一個 call
             const callsToProcess = functionCalls.filter((c: any) => !processedToolCallIds.current.has(c.call_id));
             if (callsToProcess.length) {
               callsToProcess.forEach((c: any) => processedToolCallIds.current.add(c.call_id));
 
               void (async () => {
                 try {
+                  // 目前先支援 web_search；未來你要擴充其他 function tool，可在這裡加分支
                   for (const call of callsToProcess) {
+                    if (call.name !== "web_search") continue;
+
                     let args: any = {};
                     try {
-                      args =
-                        typeof call.arguments === "string"
-                          ? JSON.parse(call.arguments || "{}")
-                          : call.arguments || {};
+                      args = typeof call.arguments === "string" ? JSON.parse(call.arguments || "{}") : call.arguments || {};
                     } catch {
                       args = {};
                     }
 
-                    // ✅ A) web_search
-                    if (call.name === "web_search") {
-                      const query = String(args.query || "").trim();
-                      const recency_days = Number(args.recency_days || 30);
-                      const domains = Array.isArray(args.domains) ? args.domains : undefined;
+                    const query = String(args.query || "").trim();
+                    const recency_days = Number(args.recency_days || 30);
+                    const domains = Array.isArray(args.domains) ? args.domains : undefined;
 
-                      postLog({
-                        role: "system",
-                        content: `[WEB_SEARCH CALL] query="${query}" recency_days=${recency_days}${
-                          domains?.length ? ` domains=${JSON.stringify(domains).slice(0, 200)}` : ""
-                        }`,
-                        eventId: `web_search_call_${call.call_id}`,
-                      });
-
-                      const res = await fetch("/api/web_search", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ query, recency_days, domains }),
-                      });
-
-                      let data: any = null;
-                      try {
-                        data = await res.json();
-                      } catch (err) {
-                        data = { error: `Failed to parse JSON: ${String(err)}` };
-                      }
-
-                      if (!res.ok) {
-                        postLog({
-                          role: "system",
-                          content: `[WEB_SEARCH ERROR] status=${res.status} ${res.statusText} body=${JSON.stringify(
-                            data
-                          ).slice(0, 300)}`,
-                          eventId: `web_search_err_${call.call_id}`,
-                        });
-                      } else {
-                        const cCount = Array.isArray(data?.citations) ? data.citations.length : 0;
-                        postLog({
-                          role: "system",
-                          content: `[WEB_SEARCH OK] citations=${cCount} preview=${String(data?.answer || "").slice(
-                            0,
-                            200
-                          )}`,
-                          eventId: `web_search_ok_${call.call_id}`,
-                        });
-                      }
-
-                      sendClientEvent(
-                        {
-                          type: "conversation.item.create",
-                          item: {
-                            type: "function_call_output",
-                            call_id: call.call_id,
-                            output: JSON.stringify(data).slice(0, 20000),
-                          },
-                        },
-                        "(tool output: web_search)"
-                      );
-                      continue;
-                    }
-
-                    // ✅ B) assistant_run（Assistants API）
-                    if (call.name === "assistant_run") {
-                      const input = String(args.input || args.query || "").trim();
-                      const providedThread = String(args.thread_id || "").trim();
-
-                      postLog({
-                        role: "system",
-                        content: `[ASSISTANT_RUN CALL] input="${input.slice(0, 200)}" thread_id=${
-                          providedThread || assistantThreadId || "(new)"
-                        }`,
-                        eventId: `assistant_run_call_${call.call_id}`,
-                      });
-
-                      const res = await fetch("/api/assistant_run", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          input,
-                          thread_id: providedThread || assistantThreadId || undefined,
-                          userId,
-                          sessionId,
-                        }),
-                      });
-
-                      let data: any = null;
-                      try {
-                        data = await res.json();
-                      } catch (err) {
-                        data = { error: `Failed to parse JSON: ${String(err)}` };
-                      }
-
-                      if (!res.ok) {
-                        postLog({
-                          role: "system",
-                          content: `[ASSISTANT_RUN ERROR] status=${res.status} ${res.statusText} body=${JSON.stringify(
-                            data
-                          ).slice(0, 600)}`,
-                          eventId: `assistant_run_err_${call.call_id}`,
-                        });
-                      } else {
-                        const answerPreview = String(data?.answer || data?.text || "").slice(0, 200);
-                        postLog({
-                          role: "system",
-                          content: `[ASSISTANT_RUN OK] thread_id=${String(data?.thread_id || "")} preview=${answerPreview}`,
-                          eventId: `assistant_run_ok_${call.call_id}`,
-                        });
-
-                        if (data?.thread_id && typeof data.thread_id === "string") {
-                          setAssistantThreadId(data.thread_id);
-                        }
-                      }
-
-                      sendClientEvent(
-                        {
-                          type: "conversation.item.create",
-                          item: {
-                            type: "function_call_output",
-                            call_id: call.call_id,
-                            output: JSON.stringify(data).slice(0, 20000),
-                          },
-                        },
-                        "(tool output: assistant_run)"
-                      );
-                      continue;
-                    }
-
+                    // 小記錄：只記 query，不把整包結果塞進 log（避免太大）
                     postLog({
                       role: "system",
-                      content: `[TOOL SKIPPED] name=${String(call.name)} (no handler)`,
-                      eventId: `tool_skipped_${call.call_id}`,
+                      content: `[WEB_SEARCH CALL] query="${query}" recency_days=${recency_days}${
+                        domains?.length ? ` domains=${JSON.stringify(domains).slice(0, 200)}` : ""
+                      }`,
+                      eventId: `web_search_call_${call.call_id}`,
                     });
+
+                    const res = await fetch("/api/web_search", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ query, recency_days, domains }),
+                    });
+
+                    let data: any = null;
+                    try {
+                      data = await res.json();
+                    } catch (err) {
+                      data = { error: `Failed to parse JSON: ${String(err)}` };
+                    }
+
+                    if (!res.ok) {
+                      postLog({
+                        role: "system",
+                        content: `[WEB_SEARCH ERROR] status=${res.status} ${res.statusText} body=${JSON.stringify(data).slice(0, 300)}`,
+                        eventId: `web_search_err_${call.call_id}`,
+                      });
+                    } else {
+                      const cCount = Array.isArray(data?.citations) ? data.citations.length : 0;
+                      postLog({
+                        role: "system",
+                        content: `[WEB_SEARCH OK] citations=${cCount} preview=${String(data?.answer || "").slice(0, 200)}`,
+                        eventId: `web_search_ok_${call.call_id}`,
+                      });
+                    }
+
+                    // 把工具結果回塞給 Realtime（同一個 call_id）
+                    sendClientEvent(
+                      {
+                        type: "conversation.item.create",
+                        item: {
+                          type: "function_call_output",
+                          call_id: call.call_id,
+                          output: JSON.stringify(data).slice(0, 20000), // 防止過大
+                        },
+                      },
+                      "(tool output: web_search)"
+                    );
                   }
 
-                  // ✅ tool 完成後：強制只輸出 answer
-                  sendClientEvent(
-                    {
-                      type: "response.create",
-                      response: {
-                        output_modalities: ["audio", "text"],
-                        instructions:
-                          "你剛剛收到工具輸出(JSON)。若 JSON 內含 answer 欄位，請直接輸出 answer 的文字內容（不要輸出 JSON、不要加前後贅字）。若沒有 answer，請用 JSON 內容合理回覆。",
-                      },
-                    },
-                    "(trigger response after tools)"
-                  );
+                  // 再觸發一次 response.create，讓模型用工具結果生成最終回答
+                  sendClientEvent({ type: "response.create" }, "(trigger response after web_search)");
                 } catch (err) {
-                  console.error("💥 tool handler failed:", err);
+                  console.error("💥 web_search tool failed:", err);
                   postLog({
                     role: "system",
-                    content: `[TOOL FAILED] ${String(err).slice(0, 400)}`,
-                    eventId: `tool_fail_${Date.now()}`,
+                    content: `[WEB_SEARCH FAILED] ${String(err).slice(0, 200)}`,
+                    eventId: `web_search_fail_${Date.now()}`,
                   });
                 }
               })();
             }
 
+            // ⚠️ 這次 done 不要當成 assistant 最終文字，直接結束（保留 currentUserMessage 供下一次回答配對）
             conversationState.current.currentAssistantResponse = {
               isActive: false,
               responseId: null,
@@ -18962,7 +18835,7 @@ function AppContent() {
             return;
           }
 
-          // ✅ 7.1：一般「文字/語音回答」完成
+          // ✅ 7.1：一般「文字/語音回答」完成，照原本流程記錄
           const assistantResponse = conversationState.current.currentAssistantResponse;
           let finalText = assistantResponse.textBuffer.trim();
 
@@ -18998,7 +18871,10 @@ function AppContent() {
             const assistantMsg = {
               content: finalText,
               eventId:
-                assistantResponse.responseId || eventData.response?.id || eventData.id || `assistant_${Date.now()}`,
+                assistantResponse.responseId ||
+                eventData.response?.id ||
+                eventData.id ||
+                `assistant_${Date.now()}`,
               timestamp: Date.now(),
             };
 
@@ -19045,7 +18921,7 @@ function AppContent() {
           console.error("❌ Realtime API error:", eventData);
           postLog({
             role: "system",
-            content: `[REALTIME ERROR] ${JSON.stringify(eventData).slice(0, 600)}`,
+            content: `[REALTIME ERROR] ${JSON.stringify(eventData).slice(0, 500)}`,
             eventId: eventData?.event_id || `rt_error_${Date.now()}`,
           });
         }
@@ -19084,32 +18960,19 @@ function AppContent() {
         }
       });
 
-      // ✅ Create offer
+      // 創建 WebRTC offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      if (!offer.sdp) {
-        throw new Error("Failed to create SDP offer");
-      }
-
-      // ✅ 重要修正：ephemeral token 連線時，必須用純 SDP body + Content-Type: application/sdp
-      const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+      const baseUrl = "https://api.openai.com/v1/realtime";
+      const model = "gpt-realtime-mini";
+      const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${EPHEMERAL_KEY}`,
-          "Content-Type": "application/sdp",
-        },
         body: offer.sdp,
+        headers: { Authorization: `Bearer ${EPHEMERAL_KEY}`, "Content-Type": "application/sdp" },
       });
-
-      if (!sdpResponse.ok) {
-        const errText = await sdpResponse.text().catch(() => "");
-        console.error("❌ Failed to establish WebRTC session:", sdpResponse.status, errText);
-        setSessionStatus("DISCONNECTED");
-        return;
-      }
-
       await pc.setRemoteDescription({ type: "answer" as RTCSdpType, sdp: await sdpResponse.text() });
+
       console.log("🎯 WebRTC connection established");
     } catch (err) {
       console.error("💥 Error connecting to realtime:", err);
@@ -19118,8 +18981,6 @@ function AppContent() {
   }
 
   function stopSession() {
-    dataChannelRef.current = null;
-
     if (dataChannel) {
       dataChannel.close();
       setDataChannel(null);
@@ -19148,7 +19009,7 @@ function AppContent() {
     pendingLogsRef.current.length = 0;
   }
 
-  /** ✅ 使用 agentConfig tools + 自動補上 web_search + assistant_run（若尚未定義） */
+  /** ✅ 使用 agentConfig tools + 自動補上 web_search（若尚未定義） */
   const updateSession = () => {
     sendClientEvent({ type: "input_audio_buffer.clear" }, "clear audio buffer on session update");
     const currentAgent = selectedAgentConfigSet?.find(
@@ -19165,12 +19026,14 @@ function AppContent() {
           create_response: true,
         };
 
-    const instructions = `${currentAgent?.instructions || ""}
+    const instructions = `${
+      currentAgent?.instructions || ""
+    }
 
 - 當問題需要公司/內部文件或知識庫內容時，請先使用 file_search 檢索向量庫，並在回答中附上來源。
-- 當問題需要最新的外部資訊（新聞、價格、政策、版本更新）時，先呼叫 web_search，再用搜尋結果回答並附上來源。
-- 當你需要使用我們已配置好的 OpenAI Assistant（長指令/固定風格/長期狀態）來回答時，先呼叫 assistant_run，把使用者問題原文帶入；工具回傳的 JSON 會有 answer 欄位，請以 answer 為主輸出。`;
+- 當問題需要最新的外部資訊（新聞、價格、政策、版本更新）時，先呼叫 web_search，再用搜尋結果回答並附上來源。`;
 
+    // ✅ web_search function tool（如果 agentConfig 沒定義，就補上）
     const webSearchTool = {
       type: "function",
       name: "web_search",
@@ -19190,62 +19053,23 @@ function AppContent() {
       },
     };
 
-    const assistantRunTool = {
-      type: "function",
-      name: "assistant_run",
-      description: "Run the configured OpenAI Assistant via server and return JSON with answer + thread_id.",
-      parameters: {
-        type: "object",
-        properties: {
-          input: { type: "string", description: "User request text" },
-          thread_id: { type: "string", description: "Existing assistant thread id (optional)" },
-        },
-        required: ["input"],
-      },
-    };
-
     const baseTools = (currentAgent?.tools ?? []) as any[];
     const hasWebSearch = baseTools.some((t) => t?.name === "web_search");
-    const hasAssistantRun = baseTools.some((t) => t?.name === "assistant_run");
-    const tools = [
-      ...baseTools,
-      ...(hasWebSearch ? [] : [webSearchTool]),
-      ...(hasAssistantRun ? [] : [assistantRunTool]),
-    ];
+    const tools = hasWebSearch ? baseTools : [...baseTools, webSearchTool];
 
-    // ✅ 重要：session.update 明確設定 output_modalities + transcription + turn_detection
-    // 同時保留 modalities / input_audio_transcription / turn_detection（相容舊欄位）
     const sessionUpdateEvent = {
       type: "session.update",
       session: {
-        type: "realtime",
+        modalities: ["text", "audio"],
         instructions,
-        tool_choice: "auto",
-        tools,
-
-        // ✅ GA 建議：output_modalities
-        output_modalities: ["audio", "text"],
-
-        // ✅ 相容一些舊實作（你原本用的 modalities）
-        modalities: ["audio", "text"],
-
-        // ✅ GA 音訊設定（STT + VAD）
-        audio: {
-          input: {
-            transcription: { model: "whisper-1" },
-            turn_detection: turnDetection ?? null,
-          },
-          // ⚠️ 不在 update 改 voice（避免 voice 限制）；voice 在 /api/session 建立 client_secret 時設定即可
-          // output: { voice: "shimmer" },
-        },
-
-        // ✅ 舊欄位相容（有些版本仍會吃）
+        voice: "shimmer",
         input_audio_transcription: { model: "whisper-1" },
-        turn_detection: turnDetection ?? null,
+        turn_detection: turnDetection,
+        tools,
+        tool_choice: "auto",
       },
     };
-
-    sendClientEvent(sessionUpdateEvent, "agent.tools + web_search + assistant_run");
+    sendClientEvent(sessionUpdateEvent, "agent.tools + web_search");
   };
 
   const cancelAssistantSpeech = async () => {
@@ -19260,7 +19084,6 @@ function AppContent() {
   };
 
   const handleSendTextMessage = () => {
-    ensureAudioPlayback(); // ✅ 解鎖音訊
     const textToSend = userText.trim();
     if (!textToSend) return;
 
@@ -19282,19 +19105,11 @@ function AppContent() {
     };
 
     setUserText("");
-
-    // ✅ 每次 response.create 都指定 output_modalities，保證同時有 text + audio
-    sendClientEvent(
-      { type: "response.create", response: { output_modalities: ["audio", "text"] } },
-      "(trigger response)"
-    );
+    sendClientEvent({ type: "response.create" }, "(trigger response)");
   };
 
   const handleTalkButtonDown = () => {
-    ensureAudioPlayback(); // ✅ 解鎖音訊
-    const dc = dataChannelRef.current;
-    if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open") return;
-
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open") return;
     cancelAssistantSpeech();
     setIsPTTUserSpeaking(true);
     setIsListening(true);
@@ -19302,23 +19117,14 @@ function AppContent() {
   };
 
   const handleTalkButtonUp = () => {
-    ensureAudioPlayback(); // ✅ 解鎖音訊
-    const dc = dataChannelRef.current;
-    if (sessionStatus !== "CONNECTED" || !dc || dc.readyState !== "open" || !isPTTUserSpeaking) return;
-
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open" || !isPTTUserSpeaking) return;
     setIsPTTUserSpeaking(false);
     setIsListening(false);
     sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
-
-    // ✅ 每次 response.create 都指定 output_modalities
-    sendClientEvent(
-      { type: "response.create", response: { output_modalities: ["audio", "text"] } },
-      "trigger response PTT"
-    );
+    sendClientEvent({ type: "response.create" }, "trigger response PTT");
   };
 
   const handleMicrophoneClick = () => {
-    ensureAudioPlayback(); // ✅ 解鎖音訊
     if (isOutputAudioBufferActive) {
       cancelAssistantSpeech();
       return;
